@@ -46,7 +46,7 @@ ifdef DEVEL
 endif
 
 override CFLAGS += -D_XOPEN_SOURCE
-override CFLAGS += -I. -DENABLE_NLS -DHAVE_LIBPURPLE -DPURPLE_DEBUG
+override CFLAGS += -I. -Icompat -DENABLE_NLS -DHAVE_LIBPURPLE -DPURPLE_DEBUG
 
 ifdef CVR
   override CFLAGS += -DPECAN_CVR
@@ -109,6 +109,7 @@ objects := msn.o \
 	   io/pn_cmd_server.o \
 	   io/pn_http_server.o \
 	   io/pn_ssl_conn.o \
+	   compat/glib.o \
 	   fix_purple.o
 
 ifdef CVR
