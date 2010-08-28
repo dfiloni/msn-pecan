@@ -533,7 +533,7 @@ write_impl (PnNode *conn,
 
         status = pn_stream_write_full (conn->stream, buf, count, &bytes_written, &tmp_error);
 
-        pn_log ("bytes_written=%zu", bytes_written);
+        pn_log ("bytes_written=%" G_GSIZE_FORMAT, bytes_written);
 
         if (status == G_IO_STATUS_NORMAL)
         {
@@ -541,7 +541,7 @@ write_impl (PnNode *conn,
             {
                 /* This shouldn't happen, right? */
                 /* It doesn't seem to happen, but keep checking for now. */
-                pn_error ("write check: %zu < %zu", bytes_written, count);
+                pn_error ("write check: %" G_GSIZE_FORMAT " < %" G_GSIZE_FORMAT, bytes_written, count);
             }
         }
         else
@@ -596,7 +596,7 @@ read_impl (PnNode *conn,
                      status, status_to_str (status));
         }
 
-        pn_log ("bytes_read=%zu", bytes_read);
+        pn_log ("bytes_read=%" G_GSIZE_FORMAT, bytes_read);
 
         if (ret_bytes_read)
             *ret_bytes_read = bytes_read;
