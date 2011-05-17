@@ -744,6 +744,9 @@ tooltip_text (PurpleBuddy *buddy,
     purple_notify_user_info_add_pair (user_info, _("Blocked"),
                                       (pn_contact_is_blocked (user) ? _("Yes") : _("No")));
 
+    if (pn_contact_get_client_id (user) & PN_CLIENT_CAP_BOT)
+        purple_notify_user_info_add_pair (user_info, _("Is BOT"), _("Yes"));
+
     if (pn_contact_get_client_name (user))
     {
         purple_notify_user_info_add_pair (user_info, _("Client"),
