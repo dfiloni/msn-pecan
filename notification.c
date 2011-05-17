@@ -775,6 +775,8 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     pn_contact_set_friendly_name(user, friendly);
 
     clientid = strtoul (cmd->params[3], NULL, 10);
+    if (!pn_contact_get_client_id (user))
+        pn_contact_set_client_id (user, clientid);
     user->mobile = (clientid & PN_CLIENT_CAP_MSNMOBILE);
 
     pn_contact_set_state(user, state);
