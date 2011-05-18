@@ -91,7 +91,14 @@ update_client_name (struct pn_contact *contact)
 
     gulong client_id;
     const gchar* msnc_v = NULL;
-    client_id = pn_contact_get_client_id (contact)/268435456;
+    client_id = pn_contact_get_client_id (contact);
+    if (client_id == 1)
+    {
+        msnc_v = "MSNC0 (mobile)";
+        goto next;
+    }
+
+    client_id = client_id/268435456;
 
     if (client_id == 1)
         msnc_v = "MSNC1";
