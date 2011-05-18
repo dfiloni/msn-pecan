@@ -150,8 +150,8 @@ pn_update_status (MsnSession *session)
     MsnCmdProc *cmdproc;
     struct pn_contact *user;
     const gchar *state_text;
-    int client_id;
-    int caps;
+    gulong client_id;
+    PnClientCaps caps;
 
     g_return_if_fail (session);
 
@@ -173,7 +173,7 @@ pn_update_status (MsnSession *session)
 #endif
 #endif
 
-    client_id = caps | (PN_CLIENT_VER_7_5 << 24);
+    client_id = caps | PN_CLIENT_VER_7_5;
 
 #if defined(PECAN_CVR)
     {
