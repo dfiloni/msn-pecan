@@ -30,12 +30,18 @@ struct PnAuth
         gchar *messenger_msn_com_p;
 
         gchar *messengersecure_live_com;
+
+        gchar *contacts_msn_com;
+
+        gchar *storage_msn_com;
     } security_token;
 
     struct
     {
         time_t messenger_msn_com;
         time_t messengersecure_live_com;
+        time_t contacts_msn_com;
+        time_t storage_msn_com;
     } expiration_time;
 
     PnAuthCb cb;

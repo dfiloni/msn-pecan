@@ -53,7 +53,7 @@ pn_set_personal_message (MsnSession *session,
     gchar *payload;
 
     cmdproc = session->notification->cmdproc;
-    payload = g_strdup_printf ("<Data><PSM>%s</PSM><CurrentMedia>%s</CurrentMedia></Data>",
+    payload = g_strdup_printf ("<Data><PSM>%s</PSM><CurrentMedia>%s</CurrentMedia></Data><MachineGuid>{F26D1F07-95E2-403C-BC18-D4BFED493428}</MachineGuid>",
                                value ? value : "", current_media ? current_media : "");
 
     {
@@ -173,7 +173,7 @@ pn_update_status (MsnSession *session)
 #endif
 #endif
 
-    client_id = caps | PN_CLIENT_VER_7_5;
+    client_id = caps | PN_CLIENT_VER_8_0;
 
 #if defined(PECAN_CVR)
     {

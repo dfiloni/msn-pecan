@@ -28,6 +28,8 @@
 #include "io/pn_node.h"
 
 #include "pn_oim.h"
+#include "ab/pn_service.h"
+#include "ab/pn_roaming.h"
 #include "pn_dp_manager.h"
 
 struct MsnNotification;
@@ -56,7 +58,11 @@ struct MsnSession
 
     struct pn_contact_list *contactlist;
     PecanOimSession *oim_session;
+    PecanServiceSession *service_session;
+    PecanRoamingSession *roaming_session;
     PnDpManager *dp_manager;
+
+    gchar *cid; /* Needed to get profile from server */
 
     PnPermission default_permission;
 
@@ -68,7 +74,6 @@ struct MsnSession
     struct MsnNotification *notification;
     struct MsnNexus *nexus;
     struct PnAuth *auth;
-    struct MsnSync *sync;
 
     GHashTable *conversations;
     GHashTable *chats;

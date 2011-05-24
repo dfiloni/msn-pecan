@@ -22,6 +22,8 @@
 
 #include <glib.h>
 
+#include "ab/pn_contactlist.h"
+
 struct pn_contact;
 struct pn_contact_list;
 struct pn_group;
@@ -316,5 +318,8 @@ const gchar *pn_contact_get_client_name (struct pn_contact *contact);
 
 void pn_contact_set_client_name (struct pn_contact *contact,
                                  const gchar *client_name);
+
+void pn_contact_set_list_op (struct pn_contact *contact,
+                                MsnListOp list_op);
 
 #endif /* PN_CONTACT_H */

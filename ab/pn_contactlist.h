@@ -44,6 +44,7 @@ typedef enum
     MSN_LIST_BL_OP = 0x04,
     MSN_LIST_RL_OP = 0x08,
     MSN_LIST_PL_OP = 0x10,
+    MSN_LIST_NULL_OP = 0x00,
 } MsnListOp;
 
 typedef void (*pn_contact_list_func_t) (struct pn_contact *contact, gpointer user_data);
@@ -52,20 +53,6 @@ struct _PurpleBuddy;
 struct _PurpleGroup;
 
 MsnListId msn_get_list_id (const gchar *list);
-
-void msn_got_add_contact (struct MsnSession *session,
-                          struct pn_contact *contact,
-                          MsnListId list_id,
-                          const gchar *group_guid);
-void msn_got_rem_contact (struct MsnSession *session,
-                          struct pn_contact *contact,
-                          MsnListId list_id,
-                          const gchar *group_guid);
-void msn_got_lst_contact (struct MsnSession *session,
-                          struct pn_contact *contact,
-                          const gchar *extra,
-                          gint list_op,
-                          GSList *group_ids);
 
 struct pn_contact_list *pn_contactlist_new (struct MsnSession *session);
 void pn_contactlist_destroy (struct pn_contact_list *contactlist);
@@ -103,8 +90,6 @@ void pn_contactlist_move_buddy (struct pn_contact_list *contactlist,
                                 const gchar *who,
                                 const gchar *old_group_name,
                                 const gchar *new_group_name);
-void pn_contactlist_check_pending (struct pn_contact_list *contactlist);
-
 void pn_contactlist_add_buddy_helper (struct pn_contact_list *contactlist,
                                       struct _PurpleBuddy *buddy,
                                       struct _PurpleGroup *group);
@@ -112,5 +97,9 @@ void pn_contactlist_add_buddy_helper (struct pn_contact_list *contactlist,
 void pn_contactlist_foreach_contact (struct pn_contact_list *contactlist,
                                      pn_contact_list_func_t func,
                                      gpointer user_data);
+
+void pn_contactlist_got_new_entry (struct MsnSession *session,
+                                   struct pn_contact *contact,
+                                   const gchar *friendly);
 
 #endif /* PN_CONTACTLIST_H */

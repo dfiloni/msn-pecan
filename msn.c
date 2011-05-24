@@ -30,11 +30,11 @@
 
 #include "switchboard.h"
 #include "notification.h"
-#include "sync.h"
 
 #include "session_private.h"
 
 #include "cmd/msg.h"
+#include "cmd/table.h"
 
 #include "ab/pn_contact_priv.h"
 
@@ -188,12 +188,6 @@ static void
 set_friendly_name (PurpleConnection *gc,
                    const gchar *entry)
 {
-    /*
-     * The server doesn't seem to store the friendly name anymore, so let's do
-     * that ourselves.
-     */
-    purple_account_set_string (gc->account, "friendly_name", entry);
-
     msn_session_set_public_alias (gc->proto_data, entry);
 }
 
@@ -1388,18 +1382,17 @@ rename_group( PurpleConnection *gc,
               GList *moved_buddies)
 {
     MsnSession *session;
-    MsnCmdProc *cmdproc;
     const gchar *old_group_guid;
-    const gchar *enc_new_group_name;
 
     session = gc->proto_data;
-    cmdproc = session->notification->cmdproc;
-    enc_new_group_name = purple_url_encode (group->name);
 
     old_group_guid = pn_contactlist_find_group_id (session->contactlist, old_name);
 
     g_return_if_fail (old_group_guid);
-    msn_cmdproc_send (cmdproc, "REG", "%s %s", old_group_guid, enc_new_group_name);
+
+    pn_service_session_request  (session->service_session,
+                                 PN_RENAME_GROUP, old_group_guid,
+                                 group->name, NULL);
 }
 
 static void
@@ -1407,23 +1400,67 @@ remove_group (PurpleConnection *gc,
               PurpleGroup *group)
 {
     MsnSession *session;
-    MsnCmdProc *cmdproc;
     const gchar *group_guid;
 
     session = gc->proto_data;
-    cmdproc = session->notification->cmdproc;
 
     /* The server automatically removes the contacts and sends
      * notifications back. */
     if ((group_guid = pn_contactlist_find_group_id (session->contactlist, group->name)))
     {
-        msn_cmdproc_send (cmdproc, "RMG", "%s", group_guid);
+        pn_service_session_request (session->service_session,
+                                    PN_RM_GROUP, group_guid,
+                                    NULL, NULL);
     }
 }
 
 /*
  * Permission stuff
  */
+
+static inline void
+set_permit_command (MsnSession *session, const gchar *passport, MsnListOp list_op)
+{
+    gchar *payload;
+    MsnCmdProc *cmdproc;
+    MsnTransaction *trans;
+    struct pn_contact *contact;
+
+    contact = pn_contactlist_find_contact (session->contactlist, passport);
+    pn_contact_set_list_op (contact, list_op);
+
+    cmdproc = session->notification->cmdproc;
+
+    gchar *domain, *name;
+    domain = strchr (passport, '@');
+    name = g_strndup (passport, domain - passport);
+
+    payload = g_strdup_printf ("<ml>"
+                               "<d n=\"%s\">"
+                               "<c n=\"%s\" l=\"%c\" t=\"1\" />"
+                               "</d>"
+                               "</ml>",
+                               domain + 1,
+                               name,
+                               (list_op == MSN_LIST_AL_OP) ? '4' : '2');
+    trans = msn_transaction_new (cmdproc, "RML", "%zu", strlen (payload));
+    msn_transaction_set_payload (trans, payload, strlen (payload));
+    msn_cmdproc_send_trans (cmdproc, trans);
+
+    payload = g_strdup_printf ("<ml>"
+                               "<d n=\"%s\">"
+                               "<c n=\"%s\" l=\"%c\" t=\"1\" />"
+                               "</d>"
+                               "</ml>",
+                               domain + 1,
+                               name,
+                               (list_op == MSN_LIST_AL_OP) ? '2' : '4');
+    trans = msn_transaction_new (cmdproc, "ADL", "%zu", strlen (payload));
+    msn_transaction_set_payload (trans, payload, strlen (payload));
+    msn_cmdproc_send_trans (cmdproc, trans);
+
+    g_free (name);
+}
 
 static void
 add_permit (PurpleConnection *gc,
@@ -1443,10 +1480,10 @@ add_permit (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
-    if (user && user->list_op & MSN_LIST_BL_OP)
-        pn_contactlist_rem_buddy (contactlist, who, MSN_LIST_BL, NULL);
+    set_permit_command (session, who, MSN_LIST_AL_OP);
 
-    pn_contactlist_add_buddy (contactlist, who, MSN_LIST_AL, NULL);
+    pn_service_session_request  (session->service_session,
+                                 PN_RM_CONTACT_BLOCK, who, NULL, NULL);
 }
 
 static void
@@ -1467,10 +1504,10 @@ add_deny (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
-    if (user && user->list_op & MSN_LIST_AL_OP)
-        pn_contactlist_rem_buddy (contactlist, who, MSN_LIST_AL, NULL);
+    set_permit_command (session, who, MSN_LIST_BL_OP);
 
-    pn_contactlist_add_buddy (contactlist, who, MSN_LIST_BL, NULL);
+    pn_service_session_request  (session->service_session,
+                                 PN_RM_CONTACT_ALLOW, who, NULL, NULL);
 }
 
 static void
@@ -1489,8 +1526,10 @@ rem_permit (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
-    pn_contactlist_rem_buddy (contactlist, who, MSN_LIST_AL, NULL);
-    pn_contactlist_add_buddy (contactlist, who, MSN_LIST_BL, NULL);
+    set_permit_command (session, who, MSN_LIST_BL_OP);
+
+    pn_service_session_request  (session->service_session,
+                                 PN_RM_CONTACT_ALLOW, who, NULL, NULL);
 }
 
 static void
@@ -1509,8 +1548,10 @@ rem_deny (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
-    pn_contactlist_rem_buddy (contactlist, who, MSN_LIST_BL, NULL);
-    pn_contactlist_add_buddy (contactlist, who, MSN_LIST_AL, NULL);
+    set_permit_command (session, who, MSN_LIST_AL_OP);
+
+    pn_service_session_request  (session->service_session,
+                                 PN_RM_CONTACT_BLOCK, who, NULL, NULL);
 }
 
 static void
@@ -1765,7 +1806,6 @@ load (PurplePlugin *plugin)
 {
     msn_notification_init ();
     msn_switchboard_init ();
-    msn_sync_init ();
 
     return TRUE;
 }
@@ -1775,7 +1815,6 @@ unload (PurplePlugin *plugin)
 {
     msn_notification_end ();
     msn_switchboard_end ();
-    msn_sync_end ();
 
     return TRUE;
 }

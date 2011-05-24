@@ -345,9 +345,6 @@ pn_contact_set_friendly_name (struct pn_contact *contact,
     purple_buddy_set_public_alias (purple_account_get_connection (account),
                                    contact->passport, contact->friendly_name);
 
-    /** @todo temporarily disable this until we have proper server-side aliases
-     * support. */
-#if 0
     /* If contact == account; display and friendly are the same thing. */
     /** @todo this is a libpurple specific thing */
     if (pn_contact_is_account (contact))
@@ -355,7 +352,6 @@ pn_contact_set_friendly_name (struct pn_contact *contact,
         pn_debug ("contact is account");
         pn_contact_set_store_name (contact, name);
     }
-#endif
 #else
     g_free (contact->friendly_name);
     contact->friendly_name = g_strdup (name);
@@ -513,9 +509,6 @@ pn_contact_set_store_name (struct pn_contact *contact,
         purple_buddy_set_private_alias (connection, contact->passport, contact->store_name);
     }
 
-    /** @todo temporarily disable this until we have proper server-side aliases
-     * support. */
-#if 0
     /* If contact == account; display and friendly are the same thing. */
     /** @todo this is a libpurple specific thing */
     if (pn_contact_is_account (contact))
@@ -523,7 +516,6 @@ pn_contact_set_store_name (struct pn_contact *contact,
         pn_debug ("contact is account");
         pn_contact_set_friendly_name (contact, name);
     }
-#endif
 #endif /* HAVE_LIBPURPLE */
 }
 
@@ -839,4 +831,32 @@ pn_contact_can_receive (const struct pn_contact *contact)
         return false;
 
     return true;
+}
+
+void 
+pn_contact_set_list_op (struct pn_contact *contact, MsnListOp list_op)
+{
+    PurpleAccount *account;
+    const gchar *passport;
+
+    contact->list_op = 0;
+    contact->list_op |= MSN_LIST_FL_OP;
+    if (list_op != MSN_LIST_NULL_OP)
+        contact->list_op |= list_op;
+
+    account = msn_session_get_user_data (contact->contactlist->session);
+    passport = contact->passport;
+
+    if (list_op == MSN_LIST_AL_OP)
+    {
+        /* These are contacts who are allowed to see our status. */
+        purple_privacy_deny_remove (account, passport, TRUE);
+        purple_privacy_permit_add (account, passport, TRUE);
+    }
+    else if (list_op == MSN_LIST_BL_OP)
+    {
+        /* These are contacts who are not allowed to see our status. */
+        purple_privacy_permit_remove (account, passport, TRUE);
+        purple_privacy_deny_add (account, passport, TRUE);
+    }
 }

@@ -62,7 +62,9 @@ msn_accept_add_cb (gpointer data)
     contact = pa->contact;
     passport = pn_contact_get_passport (contact);
 
-    pn_contactlist_add_buddy (pa->session->contactlist, passport, MSN_LIST_AL, NULL);
+    pn_service_session_request (contact->contactlist->session->service_session,
+                                PN_ADD_CONTACT_ALLOW,
+                                passport, NULL, NULL);
 
     g_free (pa);
 }
@@ -77,27 +79,35 @@ msn_cancel_add_cb (gpointer data)
     contact = pa->contact;
     passport = pn_contact_get_passport (contact);
 
-    pn_contactlist_add_buddy (pa->session->contactlist, passport, MSN_LIST_BL, NULL);
+    pn_service_session_request (contact->contactlist->session->service_session,
+                                PN_ADD_CONTACT_BLOCK,
+                                passport, NULL, NULL);
 
     g_free (pa);
 }
 
-static void
-got_new_entry (PurpleConnection *gc,
-               struct pn_contact *contact,
-               const gchar *friendly)
+void
+pn_contactlist_got_new_entry (struct MsnSession *session,
+                              struct pn_contact *contact,
+                              const gchar *friendly)
 {
     MsnPermitAdd *pa;
     const gchar *passport;
+    PurpleAccount *account;
+    account = msn_session_get_user_data(session);
 
     passport = pn_contact_get_passport (contact);
 
+    pn_service_session_request (session->service_session,
+                                PN_RM_CONTACT_PENDING,
+                                passport, NULL, NULL);
+
     pa = g_new0 (MsnPermitAdd, 1);
-    pa->session = gc->proto_data;
+    pa->session = session;
     pa->contact = contact;
 
-    purple_account_request_authorization (purple_connection_get_account (gc), passport, NULL, NULL, NULL,
-                                          purple_find_buddy (purple_connection_get_account (gc), passport) != NULL,
+    purple_account_request_authorization (account, passport, NULL, NULL, NULL,
+                                          purple_find_buddy (account, passport) != NULL,
                                           msn_accept_add_cb, msn_cancel_add_cb, pa);
 }
 #endif /* HAVE_LIBPURPLE */
@@ -181,25 +191,11 @@ request_add_group (struct pn_contact_list *contactlist,
                    const gchar *new_group_name)
 {
 #ifdef HAVE_LIBPURPLE
-    MsnCmdProc *cmdproc;
-    MsnTransaction *trans;
-    MsnMoveBuddy *data;
+    MsnSession *session = contactlist->session;
 
-    cmdproc = contactlist->session->notification->cmdproc;
-    data = g_new0 (MsnMoveBuddy, 1);
-
-    data->who = g_strdup (who);
-
-    if (old_group_name)
-        data->old_group_name = g_strdup (old_group_name);
-
-    trans = msn_transaction_new (cmdproc, "ADG", "%s %d",
-                                 purple_url_encode (new_group_name),
-                                 0);
-
-    msn_transaction_set_data (trans, data);
-
-    msn_cmdproc_send_trans (cmdproc, trans);
+    pn_service_session_request  (session->service_session,
+                                 PN_ADD_GROUP, new_group_name,
+                                 who, (gpointer) old_group_name);
 #endif /* HAVE_LIBPURPLE */
 }
 
@@ -222,177 +218,6 @@ msn_get_list_id (const gchar *list)
         return MSN_LIST_PL;
 
     return -1;
-}
-
-void
-msn_got_add_contact (MsnSession *session,
-                     struct pn_contact *contact,
-                     MsnListId list_id,
-                     const gchar *group_guid)
-{
-#ifdef HAVE_LIBPURPLE
-    PurpleAccount *account;
-    const gchar *passport;
-
-    account = msn_session_get_user_data (session);
-
-    passport = pn_contact_get_passport (contact);
-
-    if (list_id == MSN_LIST_FL)
-    {
-        if (group_guid)
-        {
-            pn_contact_add_group_id (contact, group_guid);
-        }
-    }
-    else if (list_id == MSN_LIST_AL)
-    {
-        purple_privacy_permit_add (account, passport, TRUE);
-    }
-    else if (list_id == MSN_LIST_BL)
-    {
-        purple_privacy_deny_add (account, passport, TRUE);
-    }
-    else if (list_id == MSN_LIST_RL)
-    {
-        PurpleConnection *gc;
-
-        gc = purple_account_get_connection (account);
-
-        pn_info ("reverse list add: [%s]", passport);
-
-        if (!(contact->list_op & (MSN_LIST_AL_OP | MSN_LIST_BL_OP)))
-        {
-            got_new_entry (gc, contact,
-                           pn_contact_get_friendly_name (contact));
-        }
-    }
-
-    contact->list_op |= (1 << list_id);
-    /* purple_contact_add_list_id (contact, list_id); */
-#endif /* HAVE_LIBPURPLE */
-}
-
-void
-msn_got_rem_contact (MsnSession *session,
-                     struct pn_contact *contact,
-                     MsnListId list_id,
-                     const gchar *group_guid)
-{
-#ifdef HAVE_LIBPURPLE
-    PurpleAccount *account;
-    const gchar *passport;
-
-    account = msn_session_get_user_data (session);
-
-    passport = pn_contact_get_passport (contact);
-
-    if (list_id == MSN_LIST_FL)
-    {
-        /** @todo when is the contact totally removed? */
-        /** when the group count reaches 0, and there's no list_op */
-        if (group_guid)
-        {
-            pn_contact_remove_group_id (contact, group_guid);
-            return;
-        }
-
-        g_hash_table_remove_all (contact->groups);
-    }
-    else if (list_id == MSN_LIST_AL)
-    {
-        purple_privacy_permit_remove (account, passport, TRUE);
-    }
-    else if (list_id == MSN_LIST_BL)
-    {
-        purple_privacy_deny_remove (account, passport, TRUE);
-    }
-
-    contact->list_op &= ~(1 << list_id);
-    /* purple_contact_remove_list_id (contact, list_id); */
-
-    if (contact->list_op == 0)
-    {
-        pn_debug ("no list op: [%s]",
-                  passport);
-    }
-#endif /* HAVE_LIBPURPLE */
-}
-
-void
-msn_got_lst_contact (MsnSession *session,
-                     struct pn_contact *contact,
-                     const gchar *extra,
-                     gint list_op,
-                     GSList *group_ids)
-{
-#ifdef HAVE_LIBPURPLE
-    PurpleAccount *account;
-    const gchar *passport;
-
-    account = msn_session_get_user_data (session);
-
-    passport = pn_contact_get_passport (contact);
-
-    pn_debug ("passport=%s,extra=%s,list_op=%d", contact->passport, extra, list_op);
-
-    if (list_op & MSN_LIST_FL_OP)
-    {
-        if (group_ids)
-        {
-            GSList *c;
-            for (c = group_ids; c; c = g_slist_next (c))
-            {
-                const gchar *group_guid;
-                group_guid = (const gchar *) c->data;
-                pn_contact_add_group_id (contact, group_guid);
-            }
-        }
-        else
-        {
-            pn_contact_add_group_id (contact, NULL);
-        }
-
-        if (msn_session_get_bool (session, "use_server_alias"))
-        {
-            pn_contact_set_store_name (contact, extra);
-        }
-        else
-        {
-            pn_contact_set_friendly_name (contact, extra);
-        }
-    }
-
-    if (list_op & MSN_LIST_AL_OP)
-    {
-        /* These are contacts who are allowed to see our status. */
-        purple_privacy_deny_remove (account, passport, TRUE);
-        purple_privacy_permit_add (account, passport, TRUE);
-    }
-
-    if (list_op & MSN_LIST_BL_OP)
-    {
-        /* These are contacts who are not allowed to see our status. */
-        purple_privacy_permit_remove (account, passport, TRUE);
-        purple_privacy_deny_add (account, passport, TRUE);
-    }
-
-    /* Somebody wants to be our friend :) */
-    if (list_op & MSN_LIST_PL_OP)
-    {
-        /* Users must be either allowed or blocked, right? */
-        if (!(list_op & (MSN_LIST_AL_OP | MSN_LIST_BL_OP)))
-        {
-            PurpleConnection *gc;
-
-            gc = purple_account_get_connection (account);
-
-            got_new_entry (gc, contact, extra);
-        }
-    }
-
-    contact->list_op = list_op;
-#endif /* HAVE_LIBPURPLE */
 }
 
 /**************************************************************************
@@ -610,10 +435,8 @@ pn_contactlist_rem_buddy (struct pn_contact_list *contactlist,
         return;
     }
 
-#ifdef HAVE_LIBPURPLE
     /* Then request the rem to the server. */
     msn_notification_rem_buddy (contactlist->session->notification, list, who, contact->guid, group_guid);
-#endif /* HAVE_LIBPURPLE */
 }
 
 void
@@ -698,34 +521,6 @@ pn_contactlist_move_buddy (struct pn_contact_list *contactlist,
     pn_contactlist_add_buddy (contactlist, who, MSN_LIST_FL, new_group_name);
     if (old_group_guid)
         pn_contactlist_rem_buddy (contactlist, who, MSN_LIST_FL, old_group_name);
-}
-
-static void
-contact_check_pending (gpointer key,
-                       gpointer value,
-                       gpointer user_data)
-{
-    const gchar *passport;
-    struct pn_contact *contact;
-    struct pn_contact_list *contactlist;
-
-    passport = key;
-    contact = value;
-    contactlist = user_data;
-
-    if (contact->list_op & MSN_LIST_PL_OP)
-    {
-        /* These are contacts who are pending for... something. */
-
-        pn_contactlist_add_buddy (contactlist, passport, MSN_LIST_RL, NULL);
-        pn_contactlist_rem_buddy (contactlist, passport, MSN_LIST_PL, NULL);
-    }
-}
-
-void
-pn_contactlist_check_pending (struct pn_contact_list *contactlist)
-{
-    g_hash_table_foreach (contactlist->contact_names, contact_check_pending, contactlist);
 }
 
 typedef struct
@@ -817,6 +612,7 @@ pn_contactlist_add_buddy_helper (struct pn_contact_list *contactlist,
         }
 
         /* First we're going to check if he's already there. */
+#if 0
         if (contact && contact_is_there (contact, list_id, TRUE, group_guid))
         {
             const gchar *list;
@@ -831,6 +627,7 @@ pn_contactlist_add_buddy_helper (struct pn_contact_list *contactlist,
 
             return;
         }
+#endif
     }
 
     pn_contactlist_add_buddy (contactlist, who, MSN_LIST_FL, group_name);

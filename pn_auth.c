@@ -98,6 +98,10 @@ pn_auth_free (PnAuth *auth)
 
     g_free (auth->security_token.messengersecure_live_com);
 
+    g_free (auth->security_token.contacts_msn_com);
+
+    g_free (auth->security_token.storage_msn_com);
+
     g_free (auth);
 }
 
@@ -205,6 +209,78 @@ process_body (AuthRequest *req,
 
                 t = parse_expiration_time (expires);
                 req->auth->expiration_time.messengersecure_live_com = t;
+
+                g_free (expires);
+            }
+        }
+    }
+
+    cur = strstr (body, "<wsse:BinarySecurityToken Id=\"PPToken3\">");
+    if (!cur)
+        cur = strstr (body, "<wsse:BinarySecurityToken Id=\"Compact3\">");
+    if (cur)
+    {
+        gchar *end;
+
+        cur = strchr (cur, '>') + 1;
+        end = strchr (cur, '<');
+
+        g_free (req->auth->security_token.contacts_msn_com);
+
+        req->auth->security_token.contacts_msn_com = g_strndup (cur, end - cur);
+    }
+
+    cur = strstr (body, "<wsa:Address>contacts.msn.com</wsa:Address>");
+    if (cur)
+    {
+        gchar *end, *expires;
+        time_t t;
+
+        cur = strstr (cur, "<wsu:Expires>");
+        if (cur) {
+            cur += 13;
+            end = strchr (cur, '<');
+            if (end) {
+                expires = g_strndup (cur, end - cur);
+
+                t = parse_expiration_time (expires);
+                req->auth->expiration_time.contacts_msn_com = t;
+
+                g_free (expires);
+            }
+        }
+    }
+
+    cur = strstr (body, "<wsse:BinarySecurityToken Id=\"PPToken4\">");
+    if (!cur)
+        cur = strstr (body, "<wsse:BinarySecurityToken Id=\"Compact4\">");
+    if (cur)
+    {
+        gchar *end;
+
+        cur = strchr (cur, '>') + 1;
+        end = strchr (cur, '<');
+
+        g_free (req->auth->security_token.storage_msn_com);
+
+        req->auth->security_token.storage_msn_com = g_strndup (cur, end - cur);
+    }
+
+    cur = strstr (body, "<wsa:Address>storage.msn.com</wsa:Address>");
+    if (cur)
+    {
+        gchar *end, *expires;
+        time_t t;
+
+        cur = strstr (cur, "<wsu:Expires>");
+        if (cur) {
+            cur += 13;
+            end = strchr (cur, '<');
+            if (end) {
+                expires = g_strndup (cur, end - cur);
+
+                t = parse_expiration_time (expires);
+                req->auth->expiration_time.storage_msn_com = t;
 
                 g_free (expires);
             }
@@ -340,6 +416,24 @@ open_cb (PnNode *conn,
                             "</wsp:AppliesTo>"
                             "<wsse:PolicyReference URI=\"MBI_SSL\"></wsse:PolicyReference>"
                             "</wst:RequestSecurityToken>"
+                            "<wst:RequestSecurityToken Id=\"RST3\">"
+                            "<wst:RequestType>http://schemas.xmlsoap.org/ws/2004/04/security/trust/Issue</wst:RequestType>"
+                            "<wsp:AppliesTo>"
+                            "<wsa:EndpointReference>"
+                            "<wsa:Address>contacts.msn.com</wsa:Address>"
+                            "</wsa:EndpointReference>"
+                            "</wsp:AppliesTo>"
+                            "<wsse:PolicyReference URI=\"MBI\"></wsse:PolicyReference>"
+                            "</wst:RequestSecurityToken>"
+                            "<wst:RequestSecurityToken Id=\"RST4\">"
+                            "<wst:RequestType>http://schemas.xmlsoap.org/ws/2004/04/security/trust/Issue</wst:RequestType>"
+                            "<wsp:AppliesTo>"
+                            "<wsa:EndpointReference>"
+                            "<wsa:Address>storage.msn.com</wsa:Address>"
+                            "</wsa:EndpointReference>"
+                            "</wsp:AppliesTo>"
+                            "<wsse:PolicyReference URI=\"MBI\"></wsse:PolicyReference>"
+                            "</wst:RequestSecurityToken>"
                             "</ps:RequestMultipleSecurityTokens>"
                             "</Body>"
                             "</Envelope>",
@@ -385,6 +479,8 @@ pn_auth_get_ticket (PnAuth *auth, int id, PnAuthCb cb, void *cb_data)
     switch (id) {
     case 0: ticket_time = auth->expiration_time.messenger_msn_com; break;
     case 1: ticket_time = auth->expiration_time.messengersecure_live_com; break;
+    case 2: ticket_time = auth->expiration_time.contacts_msn_com; break;
+    case 3: ticket_time = auth->expiration_time.storage_msn_com; break;
     default: return;
     }
 

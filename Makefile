@@ -86,7 +86,6 @@ objects := msn.o \
 	   page.o \
 	   session.o \
 	   switchboard.o \
-	   sync.o \
 	   pn_log.o \
 	   pn_printf.o \
 	   pn_util.o \
@@ -105,6 +104,8 @@ objects := msn.o \
 	   ab/pn_group.o \
 	   ab/pn_contact.o \
 	   ab/pn_contactlist.o \
+	   ab/pn_service.o \
+	   ab/pn_roaming.o \
 	   io/pn_stream.o \
 	   io/pn_node.o \
 	   io/pn_cmd_server.o \

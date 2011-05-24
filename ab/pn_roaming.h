@@ -1,6 +1,6 @@
 /**
- * Copyright (C) 2008-2009 Felipe Contreras.
- * Copyright (C) 1998-2006 Pidgin (see pidgin-copyright)
+ * Copyright (C) 2008-2009 Felipe Contreras
+ * Copyright (C) 2011 Devid Antonio Filoni
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -17,34 +17,26 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifndef MSN_SYNC_H
-#define MSN_SYNC_H
+#ifndef PN_ROAMING_H
+#define PN_ROAMING_H
 
-typedef struct MsnSync MsnSync;
+typedef enum
+{
+    PN_GET_PROFILE,
+    PN_UPDATE_PROFILE
+} RoamingRequestType;
+
+typedef struct PecanRoamingSession PecanRoamingSession;
 
 #include "session.h"
 
-#include "cmd/table.h"
+struct MsnSession;
 
-#include "ab/pn_contact.h"
+PecanRoamingSession *pn_roaming_session_new (MsnSession *session);
+void pn_roaming_session_free (PecanRoamingSession *roaming_session);
+void pn_roaming_session_request (PecanRoamingSession *roaming_session,
+                                 RoamingRequestType type,
+                                 const gchar *value,
+                                 const gchar *extra_value);
 
-struct MsnSync
-{
-    MsnSession *session;
-    MsnTable *cbs_table;
-    MsnTable *old_cbs_table;
-
-    gint num_users;
-    gint total_users;
-    gint num_groups;
-    gint total_groups;
-    struct pn_contact *last_user;
-};
-
-void msn_sync_init (void);
-void msn_sync_end (void);
-
-MsnSync *msn_sync_new (MsnSession *session);
-void msn_sync_destroy (MsnSync *sync);
-
-#endif /* MSN_SYNC_H */
+#endif /* PN_ROAMING_H */

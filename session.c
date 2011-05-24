@@ -33,7 +33,6 @@
 #include "cvr/pn_peer_link.h"
 #endif /* defined(PECAN_CVR) */
 
-#include "sync.h"
 #include "pn_auth.h"
 
 #include <glib/gstdio.h>
@@ -101,6 +100,8 @@ msn_session_new (const gchar *username,
     session->conv_seq = 1;
 
     session->oim_session = pn_oim_session_new (session);
+    session->service_session = pn_service_session_new (session);
+    session->roaming_session = pn_roaming_session_new (session);
 
     session->conversations = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify) msn_switchboard_unref);
     session->chats = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, (GDestroyNotify) msn_switchboard_unref);
@@ -119,6 +120,10 @@ msn_session_destroy (MsnSession *session)
         return;
 
     pn_oim_session_free (session->oim_session);
+    pn_service_session_free (session->service_session);
+    pn_roaming_session_free (session->roaming_session);
+
+    g_free (session->cid);
 
     if (session->connected)
         msn_session_disconnect (session);
@@ -148,9 +153,6 @@ msn_session_destroy (MsnSession *session)
 
     if (session->autoupdate_tune.timer)
         g_source_remove (session->autoupdate_tune.timer);
-
-    if (session->sync)
-        msn_sync_destroy (session->sync);
 
     if (session->auth)
         pn_auth_free (session->auth);
@@ -422,7 +424,8 @@ msn_session_set_error (MsnSession *session,
 
 #ifdef HAVE_LIBPURPLE
 /* stupid libpurple's local contact list, we don't need you! */
-static void
+/* TODO: do we still have to call this? */
+/* static void
 sync_users (MsnSession *session)
 {
     PurpleAccount *account;
@@ -461,7 +464,7 @@ sync_users (MsnSession *session)
         g_list_foreach(to_remove, (GFunc) purple_blist_remove_buddy, NULL);
         g_list_free(to_remove);
     }
-}
+}*/
 #endif /* HAVE_LIBPURPLE */
 
 void
@@ -474,11 +477,11 @@ msn_session_finish_login (MsnSession *session)
         return;
 
     account = msn_session_get_user_data (session);
-
+/*
 #ifdef HAVE_LIBPURPLE
     sync_users (session);
 #endif
-
+*/
     img = purple_buddy_icons_find_account_icon (account);
 
     {
@@ -505,8 +508,6 @@ msn_session_finish_login (MsnSession *session)
         connection = purple_account_get_connection (account);
         purple_connection_set_state (connection, PURPLE_CONNECTED);
     }
-
-    pn_contactlist_check_pending (session->contactlist);
 }
 
 void
@@ -557,4 +558,8 @@ msn_session_set_public_alias (MsnSession *session,
 {
     msn_session_set_prp (session, "MFN",
                          value ? value : msn_session_get_username (session));
+
+    pn_roaming_session_request (session->roaming_session,
+                                PN_UPDATE_PROFILE,
+                                value, NULL);
 }

@@ -21,7 +21,6 @@
 #include "pn_global.h"
 #include "pn_log.h"
 #include "pn_locale.h"
-#include "sync.h"
 #include "pn_auth.h"
 #include "pn_global.h"
 
@@ -39,6 +38,7 @@
 #include "ab/pn_contactlist_priv.h"
 #include "ab/pn_contact_priv.h"
 #include "ab/pn_group.h"
+#include "ab/pn_service.h"
 
 #include "io/pn_cmd_server.h"
 #include "io/pn_http_server.h"
@@ -71,7 +71,7 @@ open_cb (PnNode *conn,
 
     pn_log ("begin");
 
-    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP12");
+    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP14 CVR0");
 
     pn_log ("end");
 }
@@ -235,41 +235,6 @@ msn_notification_connect(MsnNotification *notification, const char *host, int po
 }
 
 /**************************************************************************
- * Util
- **************************************************************************/
-
-static void
-group_error_helper(MsnSession *session, const char *msg, const gchar *group_guid, int error)
-{
-    PurpleAccount *account;
-    PurpleConnection *gc;
-    char *reason = NULL;
-    char *title = NULL;
-
-    account = msn_session_get_user_data (session);
-    gc = purple_account_get_connection(account);
-
-    if (error == 224)
-    {
-        const char *group_name;
-        group_name = pn_contactlist_find_group_name(session->contactlist, group_guid);
-        reason = g_strdup_printf(_("%s is not a valid group."),
-                                 group_name);
-    }
-    else
-    {
-        reason = g_strdup(_("Unknown error."));
-    }
-
-    title = g_strdup_printf(_("%s on %s (%s)"), msg,
-                            purple_account_get_username(account),
-                            purple_account_get_protocol_name(account));
-    purple_notify_error(gc, NULL, title, reason);
-    g_free(title);
-    g_free(reason);
-}
-
-/**************************************************************************
  * Login
  **************************************************************************/
 
@@ -337,7 +302,8 @@ usr_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     if (!g_ascii_strcasecmp(cmd->params[1], "OK"))
     {
         /* OK */
-        msn_cmdproc_send(cmdproc, "SYN", "%s %s", "0", "0");
+        pn_service_session_request  (session->service_session,
+                                     PN_REQ_MEMBERLISTS, NULL, NULL, NULL);
         if (!msn_session_get_bool (session, "use_http_method")) {
             MsnNotification *ns = cmdproc->data;
             ns->alive_timer = pn_timer_new (alive_timeout, session);
@@ -385,7 +351,7 @@ ver_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     session = cmdproc->session;
 
-    proto_str = "MSNP12";
+    proto_str = "MSNP14";
 
     for (i = 1; i < cmd->param_count; i++)
     {
@@ -404,7 +370,7 @@ ver_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     }
 
     msn_cmdproc_send(cmdproc, "CVR",
-                     "0x0409 winnt 5.1 i386 MSNMSGR 6.0.0602 MSMSGS %s",
+                     "0x0409 winnt 5.1 i386 MSNMSGR 8.1.0178 msmsgs %s",
                      msn_session_get_username(session));
 }
 
@@ -485,10 +451,10 @@ chl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     MsnTransaction *trans;
     gchar buf[32];
 
-    pn_handle_challenge (cmd->params[1], "PROD0101{0RM?UBW", "CFHUR$52U_{VIX5T", buf);
+    pn_handle_challenge (cmd->params[1], "PROD0119GSJUC$18", "ILTXC!4IXB5FB*PX", buf);
 
     /* trans = msn_transaction_new(cmdproc, "QRY", "%s 32", "PROD0038W!61ZTF9"); */
-    trans = msn_transaction_new (cmdproc, "QRY", "%s 32", "PROD0101{0RM?UBW");
+    trans = msn_transaction_new (cmdproc, "QRY", "%s 32", "PROD0119GSJUC$18");
 
     msn_transaction_set_payload (trans, buf, 32);
 
@@ -498,175 +464,6 @@ chl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 /**************************************************************************
  * Buddy Lists
  **************************************************************************/
-
-static void
-adc_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
-{
-    MsnSession *session;
-    struct pn_contact *user = NULL;
-    const gchar *list = NULL;
-    const gchar *passport = NULL;
-    gchar *friendly = NULL;
-    const gchar *user_guid = NULL;
-    const gchar *group_guid = NULL;
-    MsnListId list_id;
-    guint i = 1;
-
-    list = cmd->params[i++];
-
-    for (; i < cmd->param_count; i++)
-    {
-        const char *chopped_str;
-
-        chopped_str = cmd->params[i] + 2;
-
-        /* Check for Name/email. */
-        if (strncmp (cmd->params[i], "N=", 2) == 0)
-            passport = chopped_str;
-        /* Check for Friendlyname. */
-        else if (strncmp (cmd->params[i], "F=", 2) == 0)
-            friendly = pn_url_decode (chopped_str);
-        /* Check for Contact GUID. */
-        else if (strncmp (cmd->params[i], "C=", 2) == 0)
-            user_guid = chopped_str;
-        else
-            break;
-    }
-
-    group_guid = cmd->params[i++];
-
-    session = cmdproc->session;
-
-    if (passport)
-        user = pn_contactlist_find_contact (session->contactlist, passport);
-    else if (user_guid)
-        user = pn_contactlist_find_contact_by_guid (session->contactlist, user_guid);
-
-    if (user == NULL)
-    {
-        user = pn_contact_new (session->contactlist);
-        pn_contact_set_passport (user, passport);
-    }
-
-    list_id = msn_get_list_id(list);
-
-    if (list_id == MSN_LIST_FL)
-        pn_contact_set_guid (user, user_guid);
-
-    msn_got_add_contact(session, user, list_id, group_guid);
-
-    /* There is a user that must me moved to this group */
-    if (cmd->trans && cmd->trans->data)
-    {
-        MsnAddBuddy *data = cmd->trans->data;
-
-        msn_notification_add_buddy (session->notification, "FL", data->who,
-                                    user_guid, friendly, data->group_guid);
-
-        g_free (data->who);
-        g_free (data->group_guid);
-    }
-
-    pn_contact_update(user);
-
-    g_free (friendly);
-}
-
-static void
-adc_error(MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
-{
-    MsnSession *session;
-    PurpleAccount *account;
-    PurpleConnection *gc;
-    const char *list, *passport;
-    const char *reason;
-    char *msg = NULL;
-    char **params;
-
-    session = cmdproc->session;
-    account = msn_session_get_user_data (session);
-    gc = purple_account_get_connection(account);
-    params = g_strsplit(trans->params, " ", 0);
-
-    list     = params[0];
-    passport = params[1];
-
-    if (!strcmp(list, "FL"))
-        msg = g_strdup_printf(_("Unable to add user on %s (%s)"),
-                              purple_account_get_username(account),
-                              purple_account_get_protocol_name(account));
-    else if (!strcmp(list, "BL"))
-        msg = g_strdup_printf(_("Unable to block user on %s (%s)"),
-                              purple_account_get_username(account),
-                              purple_account_get_protocol_name(account));
-    else if (!strcmp(list, "AL"))
-        msg = g_strdup_printf(_("Unable to permit user on %s (%s)"),
-                              purple_account_get_username(account),
-                              purple_account_get_protocol_name(account));
-
-    reason = pn_error_to_string (error);
-
-    if (msg != NULL)
-    {
-        purple_notify_error(gc, NULL, msg, reason);
-        g_free(msg);
-    }
-
-    if (!strcmp(list, "FL"))
-    {
-        PurpleBuddy *buddy;
-
-        buddy = purple_find_buddy(account, passport);
-
-        if (buddy != NULL)
-            purple_blist_remove_buddy(buddy);
-    }
-
-    g_strfreev(params);
-}
-
-static void
-adg_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
-{
-    MsnSession *session;
-    const gchar *group_guid;
-    char *group_name;
-
-    session = cmdproc->session;
-
-    group_guid = cmd->params[2];
-
-    group_name = pn_url_decode(cmd->params[1]);
-
-    if (strcmp(group_name, MSN_NULL_GROUP_NAME) == 0) {
-        pn_error("Invalid group name, ignoring");
-        goto leave;
-    }
-
-    pn_group_new(session->contactlist, group_name, group_guid);
-
-    /* There is a user that must me moved to this group */
-    if (cmd->trans && cmd->trans->data)
-    {
-        /* pn_contactlist_move_buddy(); */
-        struct pn_contact_list *contactlist = cmdproc->session->contactlist;
-        MsnMoveBuddy *data = cmd->trans->data;
-
-        pn_contactlist_add_buddy(contactlist, data->who, MSN_LIST_FL, group_name);
-
-        if (data->old_group_name != NULL)
-        {
-            pn_contactlist_rem_buddy(contactlist, data->who, MSN_LIST_FL, data->old_group_name);
-            g_free(data->old_group_name);
-        }
-
-        g_free(data->who);
-        g_free (data);
-    }
-
-leave:
-    g_free (group_name);
-}
 
 static void
 qng_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
@@ -702,28 +499,28 @@ iln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     state    = cmd->params[1];
     passport = cmd->params[2];
-    friendly = pn_url_decode(cmd->params[3]);
+    friendly = pn_url_decode(cmd->params[4]);
 
     user = pn_contactlist_find_contact(session->contactlist, passport);
 
     pn_contact_set_state(user, state);
     pn_contact_set_friendly_name(user, friendly);
 
-    if (cmd->param_count >= 5)
+    if (cmd->param_count >= 6)
     {
         gulong client_id;
-        client_id = atol (cmd->params[4]);
+        client_id = atol (cmd->params[5]);
         pn_contact_set_client_id (user, client_id);
     }
 
 #if defined(PECAN_CVR)
     if (msn_session_get_bool (session, "use_userdisplay"))
     {
-        if (cmd->param_count == 6)
+        if (cmd->param_count == 7)
         {
             struct pn_msnobj *obj;
             gchar *tmp;
-            tmp = pn_url_decode (cmd->params[5]);
+            tmp = pn_url_decode (cmd->params[6]);
             obj = pn_msnobj_new_from_string (tmp);
             pn_contact_set_object(user, obj);
             g_free (tmp);
@@ -762,7 +559,7 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     state    = cmd->params[0];
     passport = cmd->params[1];
-    friendly = pn_url_decode(cmd->params[2]);
+    friendly = pn_url_decode(cmd->params[3]);
 
     user = pn_contactlist_find_contact(session->contactlist, passport);
 
@@ -774,7 +571,7 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     pn_contact_set_friendly_name(user, friendly);
 
-    clientid = strtoul (cmd->params[3], NULL, 10);
+    clientid = strtoul (cmd->params[4], NULL, 10);
     if (!pn_contact_get_client_id (user))
         pn_contact_set_client_id (user, clientid);
     user->mobile = (clientid & PN_CLIENT_CAP_MSNMOBILE);
@@ -784,11 +581,11 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 #if defined(PECAN_CVR)
     if (msn_session_get_bool (session, "use_userdisplay"))
     {
-        if (cmd->param_count == 5)
+        if (cmd->param_count == 6)
         {
             struct pn_msnobj *obj;
             gchar *tmp;
-            tmp = pn_url_decode(cmd->params[4]);
+            tmp = pn_url_decode(cmd->params[5]);
             obj = pn_msnobj_new_from_string(tmp);
             pn_contact_set_object(user, obj);
             g_free (tmp);
@@ -803,8 +600,8 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     pn_contact_update(user);
 
     /* store the friendly name on the server. */
-    if (!msn_session_get_bool (session, "use_server_alias"))
-        msn_cmdproc_send (cmdproc, "SBP", "%s %s %s", pn_contact_get_guid (user), "MFN", cmd->params[2]);
+    /* if (!msn_session_get_bool (session, "use_server_alias"))
+        msn_cmdproc_send (cmdproc, "SBP", "%s %s %s", pn_contact_get_guid (user), "MFN", cmd->params[2]); */
 
     g_free (friendly);
 }
@@ -963,131 +760,14 @@ prp_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 }
 
 static void
-reg_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
+adl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
     MsnSession *session;
-    const gchar *group_guid;
-    char *group_name;
-
-    session = cmdproc->session;
-    group_guid = cmd->params[1];
-    group_name = pn_url_decode(cmd->params[2]);
-
-    pn_contactlist_rename_group_id(session->contactlist, group_guid, group_name);
-
-    g_free (group_name);
-}
-
-static void
-reg_error(MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
-{
-    const gchar *group_guid;
-    char **params;
-
-    params = g_strsplit(trans->params, " ", 0);
-
-    group_guid = params[0];
-
-    group_error_helper(cmdproc->session, _("Unable to rename group"), group_guid, error);
-
-    g_strfreev(params);
-}
-
-static void
-rem_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
-{
-    MsnSession *session;
-    struct pn_contact *user;
-    const char *list;
-    const gchar *user_id; /* passport or guid */
-    MsnListId list_id;
-    const gchar *group_guid;
-
-    session = cmdproc->session;
-    list = cmd->params[1];
-    user_id = cmd->params[2];
-
-    if (strcmp (list, "FL") == 0)
-        user = pn_contactlist_find_contact_by_guid (session->contactlist, user_id);
-    else
-        user = pn_contactlist_find_contact (session->contactlist, user_id);
-
-    g_return_if_fail(user != NULL);
-
-    list_id = msn_get_list_id(list);
-
-    if (cmd->param_count == 4)
-        group_guid = cmd->params[3];
-    else
-        group_guid = NULL;
-
-    msn_got_rem_contact(session, user, list_id, group_guid);
-    pn_contact_update(user);
-}
-
-static void
-rmg_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
-{
-    MsnSession *session;
-    const gchar *group_guid;
-
-    session = cmdproc->session;
-    group_guid = cmd->params[1];
-
-    pn_contactlist_remove_group_id(session->contactlist, group_guid);
-}
-
-static void
-rmg_error(MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
-{
-    const gchar *group_guid;
-    char **params;
-
-    params = g_strsplit(trans->params, " ", 0);
-
-    group_guid = params[0];
-
-    group_error_helper(cmdproc->session, _("Unable to delete group"), group_guid, error);
-
-    g_strfreev(params);
-}
-
-static void
-syn_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
-{
-    MsnSession *session;
-    MsnSync *sync;
-    int total_users;
 
     session = cmdproc->session;
 
-    if (cmd->param_count == 2)
-    {
-        /*
-         * This can happen if we sent a SYN with an up-to-date
-         * buddy list revision, but we send 0 to get a full list.
-         * So, error out.
-         */
-
-        msn_session_set_error(cmdproc->session, MSN_ERROR_BAD_BLIST, NULL);
-        return;
-    }
-
-    total_users  = atoi(cmd->params[3]);
-
-    if (total_users > 0)
-    {
-        sync = msn_sync_new(session);
-        sync->total_users = total_users;
-        sync->old_cbs_table = cmdproc->cbs_table;
-
-        session->sync = sync;
-        cmdproc->cbs_table = sync->cbs_table;
-    }
-    else
-    {
+    if (!session->logged_in)
         msn_session_finish_login (session);
-    }
 }
 
 static void
@@ -1120,11 +800,12 @@ ubx_cmd_post (MsnCmdProc *cmdproc,
             /* check that the closing <PSM> tag is there, and that the PSM
              * isn't empty */
             if (end > start)
+            {
                 psm = g_strndup (start, end - start);
+                pn_contact_set_personal_message (contact, psm);
+                g_free (psm);
+            }
         }
-
-        pn_contact_set_personal_message (contact, psm);
-        g_free (psm);
 
         start = g_strstr_len (payload, len, "<CurrentMedia>");
         if (start)
@@ -1148,6 +829,14 @@ ubx_cmd (MsnCmdProc *cmdproc,
          MsnCommand *cmd)
 {
     cmdproc->last_cmd->payload_cb = ubx_cmd_post;
+    cmd->payload_len = atoi (cmd->params[2]);
+}
+
+static void
+gcf_cmd (MsnCmdProc *cmdproc,
+         MsnCommand *cmd)
+{
+    cmdproc->last_cmd->payload_cb = NULL;
     cmd->payload_len = atoi (cmd->params[1]);
 }
 
@@ -1674,6 +1363,7 @@ msn_notification_add_buddy(MsnNotification *notification, const char *list,
                            const gchar *group_guid)
 {
     MsnCmdProc *cmdproc;
+
     cmdproc = notification->cmdproc;
 
     /* moogman: 
@@ -1683,31 +1373,16 @@ msn_notification_add_buddy(MsnNotification *notification, const char *list,
     if (user_guid && group_guid)
     {
         /* Buddy already in FL. Add it to group_guid. */
-        msn_cmdproc_send (cmdproc, "ADC", "%s C=%s %s", list, user_guid, group_guid);
+        pn_service_session_request  (cmdproc->session->service_session,
+                                     PN_ADD_CONTACT_GROUP, group_guid,
+                                     user_guid, NULL);
     }
     else if (strcmp(list, "FL") == 0)
     {
         /* Add buddy to our FL. */
         /* FunkTastic Foo! */
-        MsnTransaction *trans;
-        MsnAddBuddy *data;
-
-        data = g_new0 (MsnAddBuddy, 1);
-
-        data->who = g_strdup (who);
-        data->group_guid = g_strdup (group_guid);
-
-        trans = msn_transaction_new (cmdproc, "ADC", "%s N=%s F=%s",
-                                     list, who, purple_url_encode (store_name));
-
-        msn_transaction_set_data (trans, data);
-
-        msn_cmdproc_send_trans (cmdproc, trans);
-    }
-    else
-    {
-        /* Add buddy to another list (BL, AL). */
-        msn_cmdproc_send (cmdproc, "ADC", "%s N=%s", list, who);
+        pn_service_session_request  (cmdproc->session->service_session,
+                                     PN_ADD_CONTACT, who, group_guid, NULL);
     }
 }
 
@@ -1716,21 +1391,22 @@ msn_notification_rem_buddy(MsnNotification *notification, const char *list,
                            const char *who, const gchar *user_guid, const gchar *group_guid)
 {
     MsnCmdProc *cmdproc;
-    const gchar *final_who;
 
     cmdproc = notification->cmdproc;
-    final_who = ((strcmp (list, "FL") == 0) ? user_guid : who);
 
     /* moogman: If user is only in one group, set group_guid == NULL (force a complete remove).
      * It seems as if we don't need to do the above check. I've tested it as it is and it seems 
      * to work fine. However, a note is left here incase things change. */
     if (group_guid)
     {
-        msn_cmdproc_send (cmdproc, "REM", "%s %s %s", list, final_who, group_guid);
+        pn_service_session_request  (cmdproc->session->service_session,
+                                     PN_RM_CONTACT_GROUP, user_guid,
+                                     group_guid, NULL);
     }
     else
     {
-        msn_cmdproc_send (cmdproc, "REM", "%s %s", list, final_who);
+        pn_service_session_request  (cmdproc->session->service_session,
+                                     PN_RM_CONTACT_AB, user_guid, NULL, NULL);
     }
 }
 
@@ -1748,12 +1424,9 @@ msn_notification_init(void)
     /* Synchronous */
     msn_table_add_cmd(cbs_table, "CHG", "CHG", chg_cmd);
     msn_table_add_cmd(cbs_table, "CHG", "ILN", iln_cmd);
-    msn_table_add_cmd(cbs_table, "ADC", "ADC", adc_cmd);
     msn_table_add_cmd(cbs_table, "ADC", "ILN", iln_cmd);
-    msn_table_add_cmd(cbs_table, "REM", "REM", rem_cmd);
     msn_table_add_cmd(cbs_table, "USR", "USR", usr_cmd);
     msn_table_add_cmd(cbs_table, "USR", "XFR", xfr_cmd);
-    msn_table_add_cmd(cbs_table, "SYN", "SYN", syn_cmd);
     msn_table_add_cmd(cbs_table, "CVR", "CVR", cvr_cmd);
     msn_table_add_cmd(cbs_table, "VER", "VER", ver_cmd);
     /* msn_table_add_cmd(cbs_table, "REA", "REA", rea_cmd); */
@@ -1761,10 +1434,8 @@ msn_notification_init(void)
     msn_table_add_cmd(cbs_table, "PRP", "PRP", prp_cmd);
     /* msn_table_add_cmd(cbs_table, "BLP", "BLP", blp_cmd); */
     msn_table_add_cmd(cbs_table, "BLP", "BLP", NULL);
-    msn_table_add_cmd(cbs_table, "REG", "REG", reg_cmd);
-    msn_table_add_cmd(cbs_table, "ADG", "ADG", adg_cmd);
-    msn_table_add_cmd(cbs_table, "RMG", "RMG", rmg_cmd);
     msn_table_add_cmd(cbs_table, "XFR", "XFR", xfr_cmd);
+    msn_table_add_cmd(cbs_table, "ADL", "ADL", adl_cmd);
 
     /* Asynchronous */
     msn_table_add_cmd(cbs_table, NULL, "IPG", ipg_cmd);
@@ -1772,9 +1443,7 @@ msn_notification_init(void)
     msn_table_add_cmd(cbs_table, NULL, "NOT", not_cmd);
 
     msn_table_add_cmd(cbs_table, NULL, "CHL", chl_cmd);
-    msn_table_add_cmd(cbs_table, NULL, "REM", rem_cmd);
-    msn_table_add_cmd(cbs_table, NULL, "ADC", adc_cmd);
-
+    msn_table_add_cmd(cbs_table, NULL, "RML", NULL);
     msn_table_add_cmd(cbs_table, NULL, "QRY", NULL);
     msn_table_add_cmd(cbs_table, NULL, "QNG", qng_cmd);
     msn_table_add_cmd(cbs_table, NULL, "FLN", fln_cmd);
@@ -1782,6 +1451,7 @@ msn_notification_init(void)
     msn_table_add_cmd(cbs_table, NULL, "ILN", iln_cmd);
     msn_table_add_cmd(cbs_table, NULL, "OUT", out_cmd);
     msn_table_add_cmd(cbs_table, NULL, "RNG", rng_cmd);
+    msn_table_add_cmd(cbs_table, NULL, "GCF", gcf_cmd);
 
     msn_table_add_cmd(cbs_table, NULL, "UBX", ubx_cmd);
 
@@ -1793,9 +1463,6 @@ msn_notification_init(void)
 
     msn_table_add_cmd(cbs_table, "fallback", "XFR", xfr_cmd);
 
-    msn_table_add_error(cbs_table, "ADC", adc_error);
-    msn_table_add_error(cbs_table, "REG", reg_error);
-    msn_table_add_error(cbs_table, "RMG", rmg_error);
     /* msn_table_add_error(cbs_table, "REA", rea_error); */
     msn_table_add_error(cbs_table, "USR", usr_error);
 
@@ -1814,6 +1481,9 @@ msn_notification_init(void)
     msn_table_add_msg_type(cbs_table,
                            "application/x-msmsgssystemmessage",
                            system_msg);
+    msn_table_add_msg_type(cbs_table,
+                           "application/x-msmsgsinitialmdatanotification",
+                           NULL);
 }
 
 void
