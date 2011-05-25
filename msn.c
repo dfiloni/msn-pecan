@@ -605,6 +605,9 @@ list_emblems (PurpleBuddy *b)
 
     contact = b->proto_data;
 
+    if (contact && pn_contact_get_client_id (contact) & PN_CLIENT_CAP_BOT)
+        return "bot";
+
     if (contact && contact->mobile)
         return "mobile";
 
