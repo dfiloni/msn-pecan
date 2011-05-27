@@ -53,7 +53,7 @@ pn_set_personal_message (MsnSession *session,
     gchar *payload;
 
     cmdproc = session->notification->cmdproc;
-    payload = g_strdup_printf ("<Data><PSM>%s</PSM><CurrentMedia>%s</CurrentMedia></Data><MachineGuid>{F26D1F07-95E2-403C-BC18-D4BFED493428}</MachineGuid>",
+    payload = g_strdup_printf ("<Data><PSM>%s</PSM><CurrentMedia>%s</CurrentMedia></Data><MachineGuid>{CFE80F9D-180F-4399-82AB-413F33A1FA11}</MachineGuid>",
                                value ? value : "", current_media ? current_media : "");
 
     {
