@@ -760,14 +760,59 @@ prp_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 }
 
 static void
-adl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
+adl_cmd_read_payload (MsnCmdProc *cmdproc,
+                      MsnCommand *cmd,
+                      gchar *payload,
+                      gsize len)
 {
     MsnSession *session;
+    struct pn_contact *contact;
+    gchar *cur, *end, *domain, *name, *email;
 
     session = cmdproc->session;
 
-    if (!session->logged_in)
-        msn_session_finish_login (session);
+    cur = strstr (payload, "<d n=\"") + 6;
+    end = strchr (cur, '\"');
+    domain = g_strndup (cur, end - cur);
+
+    cur = strstr (end, "<c n=\"") + 6;
+    end = strchr (cur, '\"');
+    name = g_strndup (cur, end - cur);
+
+    email = g_strdup_printf ("%s@%s", name, domain);
+
+    pn_service_session_request (session->service_session,
+                                PN_ADD_CONTACT_PENDING,
+                                email, NULL, NULL);
+
+    contact = pn_contact_new (session->contactlist);
+    pn_contact_set_passport (contact, email);
+    pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+    pn_contactlist_got_new_entry (session, contact, email);
+
+    g_free (domain);
+    g_free (name);
+    g_free (email);
+}
+
+static void
+adl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
+{
+    if (!g_ascii_strcasecmp(cmd->params[1], "OK"))
+    {
+        /* OK */
+        MsnSession *session;
+
+        session = cmdproc->session;
+
+        if (!session->logged_in)
+            msn_session_finish_login (session);
+    }
+    else
+    {
+        cmd->payload_len = atoi(cmd->params[1]);
+        cmdproc->last_cmd->payload_cb = adl_cmd_read_payload;
+    }
 }
 
 static void
@@ -1442,6 +1487,7 @@ msn_notification_init(void)
     msn_table_add_cmd(cbs_table, NULL, "MSG", msg_cmd);
     msn_table_add_cmd(cbs_table, NULL, "NOT", not_cmd);
 
+    msn_table_add_cmd(cbs_table, NULL, "ADL", adl_cmd);
     msn_table_add_cmd(cbs_table, NULL, "CHL", chl_cmd);
     msn_table_add_cmd(cbs_table, NULL, "RML", NULL);
     msn_table_add_cmd(cbs_table, NULL, "QRY", NULL);

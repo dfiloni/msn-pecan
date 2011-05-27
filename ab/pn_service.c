@@ -539,6 +539,8 @@ add_role_contact_request (PnNode *conn,
         member_role = "Allow";
     else if (service_request->type == PN_ADD_CONTACT_BLOCK)
         member_role = "Block";
+    else if (service_request->type == PN_ADD_CONTACT_PENDING)
+        member_role = "Pending";
 
     pn_log ("begin");
 
@@ -1125,6 +1127,8 @@ open_cb (PnNode *conn,
         add_role_contact_request (conn, service_request);
     else if (service_request->type == PN_RM_CONTACT_PENDING)
         rm_role_contact_request (conn, service_request);
+    else if (service_request->type == PN_ADD_CONTACT_PENDING)
+        add_role_contact_request (conn, service_request);
     else if (service_request->type == PN_ADD_GROUP)
         send_add_group_request (conn, service_request);
     else if (service_request->type == PN_RM_GROUP)
@@ -1655,6 +1659,7 @@ read_cb (PnNode *conn,
                                         service_request->value, NULL, NULL);
         /* else if (service_request->type == PN_ADD_CONTACT_ALLOW) */
         /* else if (service_request->type == PN_RM_CONTACT_PENDING) */
+        /* else if (service_request->type == PN_ADD_CONTACT_PENDING) */
         else if (service_request->type == PN_ADD_GROUP)
             process_body_add_group (service_request, body);
         else if (service_request->type == PN_RM_GROUP)
