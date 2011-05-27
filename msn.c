@@ -230,6 +230,10 @@ msn_set_personal_message_cb (PurpleConnection *gc, const gchar *entry)
     session = gc->proto_data;
     purple_account_set_string(session->user_data, "personal_message", entry);
 
+    pn_roaming_session_request (session->roaming_session,
+                                PN_UPDATE_PROFILE,
+                                NULL, entry);
+
     pn_update_personal_message (session);
 }
 #endif /* PECAN_USE_PSM */

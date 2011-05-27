@@ -31,6 +31,8 @@
 #include <string.h> /* for strlen */
 #include <stdlib.h> /* for atoi */
 
+#include <account.h>
+
 #include "pn_log.h"
 
 struct PecanRoamingSession
@@ -216,6 +218,8 @@ send_update_profile_request (PnNode *conn,
     gchar *header;
     gsize body_len;
     PnAuth *auth = roaming_request->roaming_session->session->auth;
+    gchar *friendly = roaming_request->value;
+    gchar *psm = roaming_request->extra_value;
 
     pn_log ("begin");
 
@@ -240,8 +244,8 @@ send_update_profile_request (PnNode *conn,
                             "<ResourceID>%s</ResourceID>\r\n"
                             "<ExpressionProfile>\r\n"
                             "<FreeText>Update</FreeText>\r\n"
-                            "<DisplayName>%s</DisplayName>\r\n"
-                            /* "<PersonalStatus>%s</PersonalStatus>\r\n" */
+                            "%s%s%s\r\n"
+                            "%s%s%s"
                             "<Flags>0</Flags>\r\n"
                             "</ExpressionProfile>\r\n"
                             "</profile>\r\n"
@@ -251,7 +255,12 @@ send_update_profile_request (PnNode *conn,
                             roaming_request->roaming_session->cachekey,
                             auth->security_token.storage_msn_com,
                             roaming_request->roaming_session->resource_id,
-                            roaming_request->value);
+                            friendly ? "<DisplayName>" : "",
+                            friendly ? friendly : "",
+                            friendly ? "</DisplayName>\r\n" : "",
+                            psm ? "<PersonalStatus>" : "",
+                            psm ? psm : "",
+                            psm ? "</PersonalStatus>\r\n" : "");
 
     body_len = strlen (body);
 
@@ -318,7 +327,7 @@ static void
 process_get_profile (RoamingRequest *roaming_request,
                      char *body)
 {
-    gchar *cur, *end, *friendly;
+    gchar *cur, *end, *value;
 
     cur = strstr (body, "<ResourceID>");
     if (cur)
@@ -335,16 +344,36 @@ process_get_profile (RoamingRequest *roaming_request,
 
         cur = strchr (cur, '>') + 1;
         end = strstr (cur, "</DisplayName>");
-        friendly = g_strndup (cur, end - cur);
+        value = g_strndup (cur, end - cur);
 
-        if (friendly)
+        if (value)
         {
             msn_session_set_prp (roaming_request->roaming_session->session,
-                                 "MFN", friendly);
+                                 "MFN", value);
 
-            g_free (friendly);
+            g_free (value);
         }
     }
+
+#ifndef PECAN_USE_PSM
+    cur = strstr (body, "<PersonalStatus>");
+    if (cur)
+    {
+        PurpleAccount *account;
+        account = msn_session_get_user_data (roaming_request->roaming_session->session);
+
+        cur = strchr (cur, '>') + 1;
+        end = strstr (cur, "</PersonalStatus>");
+        value = g_strndup (cur, end - cur);
+
+        if (value)
+        {
+            purple_account_set_string(account, "personal_message", value);
+
+            g_free (value);
+        }
+    }
+#endif /* PECAN_USE_PSM */
 }
 
 static void
