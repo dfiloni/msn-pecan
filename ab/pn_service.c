@@ -1316,7 +1316,7 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             g_free (passport);
         }
-        cur = strstr (cur, "<PassportName>");
+        cur = strstr (next, "<PassportName>");
     }
 
     msn_session_set_prp (service_request->service_session->session,
