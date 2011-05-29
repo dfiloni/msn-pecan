@@ -322,4 +322,6 @@ void pn_contact_set_client_name (struct pn_contact *contact,
 void pn_contact_set_list_op (struct pn_contact *contact,
                                 MsnListOp list_op);
 
+int pn_contact_get_network_id (struct pn_contact *contact);
+
 #endif /* PN_CONTACT_H */

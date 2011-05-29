@@ -53,6 +53,7 @@
 
 /* libpurple stuff. */
 #include <account.h>
+#include <prefs.h>
 #include <cipher.h>
 
 static MsnTable *cbs_table;
@@ -441,6 +442,27 @@ msg_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     }
 }
 
+
+
+static void
+ubm_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
+{
+    /* NOTE: cmd is not always cmdproc->last_cmd, sometimes cmd is a queued
+     * command and we are processing it */
+
+    if (cmd->payload == NULL)
+    {
+        cmdproc->last_cmd->payload_cb  = msg_cmd_post;
+        cmd->payload_len = atoi(cmd->params[3]);
+    }
+    else
+    {
+        g_return_if_fail(cmd->payload_cb != NULL);
+
+        cmd->payload_cb(cmdproc, cmd, cmd->payload, cmd->payload_len);
+    }
+}
+
 /**************************************************************************
  * Challenges
  **************************************************************************/
@@ -767,7 +789,7 @@ adl_cmd_read_payload (MsnCmdProc *cmdproc,
 {
     MsnSession *session;
     struct pn_contact *contact;
-    gchar *cur, *end, *domain, *name, *email;
+    gchar *cur, *end, *domain, *name, *email, *t;
 
     session = cmdproc->session;
 
@@ -779,19 +801,27 @@ adl_cmd_read_payload (MsnCmdProc *cmdproc,
     end = strchr (cur, '\"');
     name = g_strndup (cur, end - cur);
 
+    cur = strstr (end, "t=\"") + 3;
+    end = strchr (cur, '\"');
+    t = g_strndup (cur, end - cur);
+
     email = g_strdup_printf ("%s@%s", name, domain);
 
-    pn_service_session_request (session->service_session,
-                                PN_ADD_CONTACT_PENDING,
-                                email, NULL, NULL);
+    if (strcmp (t, "32") != 0)
+    {
+        pn_service_session_request (session->service_session,
+                                    PN_ADD_CONTACT_PENDING,
+                                    email, NULL, NULL);
 
-    contact = pn_contact_new (session->contactlist);
-    pn_contact_set_passport (contact, email);
-    pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
-    pn_contactlist_got_new_entry (session, contact, email);
+        contact = pn_contact_new (session->contactlist);
+        pn_contact_set_passport (contact, email);
+        pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+        pn_contactlist_got_new_entry (session, contact, email);
+    }
 
     g_free (domain);
     g_free (name);
+    g_free (t);
     g_free (email);
 }
 
@@ -813,6 +843,13 @@ adl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
         cmd->payload_len = atoi(cmd->params[1]);
         cmdproc->last_cmd->payload_cb = adl_cmd_read_payload;
     }
+}
+
+static void
+fqy_cmd (MsnCmdProc *cmdproc, MsnCommand *cmd)
+{
+    cmd->payload_len = atoi(cmd->params[1]);
+    cmdproc->last_cmd->payload_cb = NULL;
 }
 
 static void
@@ -1067,6 +1104,53 @@ xfr_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 /**************************************************************************
  * Message Types
  **************************************************************************/
+
+static void
+plain_msg(MsnCmdProc *cmdproc, MsnMessage *msg)
+{
+    PurpleConnection *gc;
+    PurpleAccount *account;
+    const char *body;
+    char *body_str;
+    char *body_enc;
+    char *body_final;
+    size_t body_len;
+    char *passport;
+    const char *value;
+
+    account = msn_session_get_user_data (cmdproc->session);
+    gc = purple_account_get_connection (account);
+
+    body = msn_message_get_bin_data(msg, &body_len);
+    body_str = g_strndup(body, body_len);
+    body_enc = g_markup_escape_text(body_str, -1);
+    g_free(body_str);
+
+    passport = g_strdup (msg->remote_user);
+
+    if ((value = msn_message_get_attr(msg, "X-MMS-IM-Format")) != NULL)
+    {
+        char *pre, *post;
+
+        msn_parse_format(value, &pre, &post);
+
+        body_final = g_strdup_printf("%s%s%s", pre ? pre : "",
+                                     body_enc ? body_enc : "", post ? post : "");
+
+        g_free(pre);
+        g_free(post);
+        g_free(body_enc);
+    }
+    else
+    {
+        body_final = body_enc;
+    }
+
+    serv_got_im (gc, passport, body_final, 0, time (NULL));
+
+    g_free(body_final);
+    g_free(passport);
+}
 
 static void
 profile_msg(MsnCmdProc *cmdproc, MsnMessage *msg)
@@ -1485,9 +1569,11 @@ msn_notification_init(void)
     /* Asynchronous */
     msn_table_add_cmd(cbs_table, NULL, "IPG", ipg_cmd);
     msn_table_add_cmd(cbs_table, NULL, "MSG", msg_cmd);
+    msn_table_add_cmd(cbs_table, NULL, "UBM", ubm_cmd);
     msn_table_add_cmd(cbs_table, NULL, "NOT", not_cmd);
 
     msn_table_add_cmd(cbs_table, NULL, "ADL", adl_cmd);
+    msn_table_add_cmd(cbs_table, NULL, "FQY", fqy_cmd);
     msn_table_add_cmd(cbs_table, NULL, "CHL", chl_cmd);
     msn_table_add_cmd(cbs_table, NULL, "RML", NULL);
     msn_table_add_cmd(cbs_table, NULL, "QRY", NULL);
@@ -1512,6 +1598,9 @@ msn_notification_init(void)
     /* msn_table_add_error(cbs_table, "REA", rea_error); */
     msn_table_add_error(cbs_table, "USR", usr_error);
 
+    msn_table_add_msg_type(cbs_table,
+                           "text/plain",
+                           plain_msg);
     msn_table_add_msg_type(cbs_table,
                            "text/x-msmsgsprofile",
                            profile_msg);

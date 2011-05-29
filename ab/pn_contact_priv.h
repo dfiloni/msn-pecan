@@ -62,6 +62,7 @@ struct pn_contact {
     gchar *client_name; /**< The client name/version. */
     CurrentMedia media; /**< The current media. */
     gchar *guid; /**< The GUID. Only present for contacts in our FL. */
+    gint networkid;
 
     PecanStatus status;
 

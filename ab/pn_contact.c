@@ -860,3 +860,9 @@ pn_contact_set_list_op (struct pn_contact *contact, MsnListOp list_op)
         purple_privacy_deny_add (account, passport, TRUE);
     }
 }
+
+int
+pn_contact_get_network_id (struct pn_contact *contact)
+{
+    return contact->networkid;
+}

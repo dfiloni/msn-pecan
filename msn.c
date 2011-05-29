@@ -33,7 +33,7 @@
 
 #include "session_private.h"
 
-#include "cmd/msg.h"
+#include "cmd/msg_private.h"
 #include "cmd/table.h"
 
 #include "ab/pn_contact_priv.h"
@@ -612,6 +612,9 @@ list_emblems (PurpleBuddy *b)
     if (contact && pn_contact_get_client_id (contact) & PN_CLIENT_CAP_BOT)
         return "bot";
 
+    if (contact && pn_contact_get_network_id (contact) == 32)
+	    return "yahoo";
+
     if (contact && contact->mobile)
         return "mobile";
 
@@ -689,13 +692,17 @@ tooltip_text (PurpleBuddy *buddy,
     struct pn_contact *user;
     PurplePresence *presence;
     PurpleStatus *status;
+    PurpleAccount *account;
+    MsnSession *session;
 
     if (!buddy)
         return;
 
     presence = purple_buddy_get_presence (buddy);
     status = purple_presence_get_active_status (presence);
-    user = buddy->proto_data;
+    account = purple_presence_get_account (presence);
+    session = account->gc->proto_data;
+    user = pn_contactlist_find_contact (session->contactlist, buddy->name);
 
     if (purple_presence_is_online (presence))
     {
@@ -744,6 +751,11 @@ tooltip_text (PurpleBuddy *buddy,
 
     purple_notify_user_info_add_pair (user_info, _("Blocked"),
                                       (pn_contact_is_blocked (user) ? _("Yes") : _("No")));
+
+    if (pn_contact_get_network_id (user) == 32)
+    {
+        purple_notify_user_info_add_pair (user_info, _("Is Yahoo!"), _("Yes"));
+    }
 
     if (pn_contact_get_client_id (user) & PN_CLIENT_CAP_BOT)
         purple_notify_user_info_add_pair (user_info, _("Is BOT"), _("Yes"));
@@ -1095,6 +1107,27 @@ grab_emoticons(MsnSession *session,
 #endif /* PURPLE_VERSION_CHECK(2,5,0) */
 #endif /* defined(PECAN_CVR) */
 
+static void
+send_uum_msg (MsnSession *session,
+              const gchar *who,
+              MsnMessage *msg)
+{
+	MsnCmdProc *cmdproc;
+	MsnTransaction *trans;
+	char *payload;
+	gsize payload_len;
+	gint type;
+
+    cmdproc = session->notification->cmdproc;
+	payload = msn_message_gen_payload (msg, &payload_len);
+    type = msg->type;
+
+    trans = msn_transaction_new (cmdproc, "UUM", "%s 32 %d %zu",
+                                 who, type, payload_len);
+    msn_transaction_set_payload (trans, payload, payload_len);
+    msn_cmdproc_send_trans (cmdproc, trans);
+}
+
 static gint
 send_im (PurpleConnection *gc,
          const gchar *who,
@@ -1147,6 +1180,22 @@ send_im (PurpleConnection *gc,
         contact = pn_contactlist_find_contact (session->contactlist, who);
         swboard = msn_session_find_swboard (session, who);
         user = msn_session_get_contact (session);
+
+        /* Yahoo! user */
+        if (contact && (pn_contact_get_network_id (contact) == 32))
+        {
+            MsnMessage *msg;
+
+            msg = msn_message_new_plain (msgtext);
+            msn_message_set_attr (msg, "X-MMS-IM-Format", msgformat);
+
+            g_free (msgformat);
+            g_free (msgtext);
+
+            send_uum_msg (session, who, msg);
+
+            return 1;
+        }
 
         if (contact && contact->status == PN_STATUS_OFFLINE && !swboard)
             offline = TRUE;
@@ -1755,12 +1804,13 @@ get_info (PurpleConnection *gc,
     PurpleNotifyUserInfo *user_info;
     struct pn_contact *user;
     PurpleBuddy *buddy;
+    MsnSession *session = gc->proto_data;
 
     user_info = purple_notify_user_info_new ();
     purple_notify_user_info_add_pair (user_info, _("Username"), name);
 
     buddy = purple_find_buddy (purple_connection_get_account (gc), name);
-    user = (buddy ? buddy->proto_data : NULL);
+    user = pn_contactlist_find_contact (session->contactlist, name);
 
     if (user)
     {
@@ -1791,10 +1841,12 @@ get_info (PurpleConnection *gc,
         if (work_phone)
             purple_notify_user_info_add_pair (user_info, _("Work Phone"), work_phone);
 
-        purple_notify_user_info_add_pair (user_info, _("Has Space"),
-                                          ((user->client_id & PN_CLIENT_CAP_SPACE) ? _("Yes") : _("No")));
+        if (pn_contact_get_network_id (user) != 32)
+            purple_notify_user_info_add_pair (user_info, _("Has Space"),
+                                              ((user->client_id & PN_CLIENT_CAP_SPACE) ? _("Yes") : _("No")));
     }
 
+    if (user && pn_contact_get_network_id (user) != 32)
     {
         gchar *tmp;
         static char *profile_url = "http://spaces.live.com/profile.aspx?mem=";

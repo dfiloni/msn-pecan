@@ -828,6 +828,13 @@ msg_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     cmdproc->last_cmd->payload_cb = msg_cmd_post;
 }
 
+static void
+ubm_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
+{
+    cmd->payload_len = atoi(cmd->params[3]);
+    cmdproc->last_cmd->payload_cb = msg_cmd_post;
+}
+
 /** @todo This ACK, NAK, timeout stuff needs to be completely reworked.
  * This leaves way too much room for bugs. */
 static void
@@ -1875,6 +1882,7 @@ msn_switchboard_init(void)
     msn_table_add_cmd(cbs_table, "USR", "USR", usr_cmd);
 
     msn_table_add_cmd(cbs_table, NULL, "MSG", msg_cmd);
+    msn_table_add_cmd(cbs_table, NULL, "UBM", ubm_cmd);
     msn_table_add_cmd(cbs_table, NULL, "JOI", joi_cmd);
     msn_table_add_cmd(cbs_table, NULL, "BYE", bye_cmd);
     msn_table_add_cmd(cbs_table, NULL, "OUT", out_cmd);

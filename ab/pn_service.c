@@ -1040,12 +1040,13 @@ send_rml_command (ServiceRequest *service_request)
         name = g_strndup (service_request->value, domain - service_request->value);
         payload = g_strdup_printf ("<ml>"
                                    "<d n=\"%s\">"
-                                   "<c n=\"%s\" l=\"%d\" t=\"1\" />"
+                                   "<c n=\"%s\" l=\"%d\" t=\"%d\" />"
                                    "</d>"
                                    "</ml>",
                                    domain + 1,
                                    name,
-                                   contact->list_op);
+                                   contact->list_op,
+                                   contact->networkid);
 
         trans = msn_transaction_new (cmdproc, "RML", "%zu", strlen (payload));
         msn_transaction_set_payload (trans, payload, strlen (payload));
@@ -1077,12 +1078,13 @@ send_updated_adl_command (ServiceRequest *service_request)
         name = g_strndup (service_request->value, domain - service_request->value);
         payload = g_strdup_printf ("<ml>"
                                    "<d n=\"%s\">"
-                                   "<c n=\"%s\" l=\"%d\" t=\"1\" />"
+                                   "<c n=\"%s\" l=\"%d\" t=\"%d\" />"
                                    "</d>"
                                    "</ml>",
                                    domain + 1,
                                    name,
-                                   contact->list_op);
+                                   contact->list_op,
+                                   contact->networkid);
 
         trans = msn_transaction_new (cmdproc, "ADL", "%zu", strlen (payload));
         msn_transaction_set_payload (trans, payload, strlen (payload));
@@ -1156,6 +1158,54 @@ next_request (PecanServiceSession *service_session)
     service_process_requests (service_session);
 }
 
+static inline void
+send_login_fqy_command (struct MsnSession *session)
+{
+    PurpleAccount *account;
+    GSList *buddies;
+    gchar *payload;
+    MsnCmdProc *cmdproc;
+    MsnTransaction *trans;
+
+    cmdproc = session->notification->cmdproc;
+
+    account = msn_session_get_user_data (session);
+    payload = g_strdup ("<ml l=\"1\">");
+
+    buddies = purple_find_buddies (account, NULL);
+    for (buddies = purple_find_buddies (account, NULL); buddies;
+         buddies = g_slist_delete_link (buddies, buddies))
+    {
+        PurpleBuddy *buddy = buddies->data;
+        const gchar *buddy_name = purple_buddy_get_name (buddy);
+        struct pn_contact *contact;
+
+        contact = pn_contactlist_find_contact (session->contactlist, buddy_name);
+
+        if (contact && contact->networkid == 32)
+        {
+            gchar *domain, *name;
+
+            domain = strchr (buddy_name, '@');
+            name = g_strndup (buddy_name, domain - buddy_name);
+
+            payload = g_strdup_printf ("<ml>"
+                                       "<d n=\"%s\">"
+                                       "<c n=\"%s\" />"
+                                       "</d>"
+                                       "</ml>",
+                                       domain + 1,
+                                       name);
+
+            trans = msn_transaction_new (cmdproc, "FQY", "%zu", strlen (payload));
+            msn_transaction_set_payload (trans, payload, strlen (payload));
+            msn_cmdproc_send_trans (cmdproc, trans);
+
+            g_free (name);
+        }
+    }
+}
+
 /* Send ADL */
 /* TODO: rewrite this. Also this should be < 7500 bytes, if it isn't send two (or more) ADL */
 static inline void
@@ -1190,12 +1240,13 @@ send_login_adl_command (struct MsnSession *session)
             name = g_strndup (buddy_name, domain - buddy_name);
             payload = g_strdup_printf ("%s"
                                        "<d n=\"%s\">"
-                                       "<c n=\"%s\" l=\"%d\" t=\"1\" />"
+                                       "<c n=\"%s\" l=\"%d\" t=\"%d\" />"
                                        "</d>",
                                        tmp,
                                        domain + 1,
                                        name,
-                                       contact->list_op);
+                                       contact->list_op,
+                                       contact->networkid);
             g_free (tmp);
             g_free (name);
         }
@@ -1209,6 +1260,8 @@ send_login_adl_command (struct MsnSession *session)
     trans = msn_transaction_new (cmdproc, "ADL", "%zu", strlen (payload));
     msn_transaction_set_payload (trans, payload, strlen (payload));
     msn_cmdproc_send_trans (cmdproc, trans);
+
+    send_login_fqy_command (session);
 }
 
 static void
@@ -1243,11 +1296,44 @@ process_body_req_memberlists (ServiceRequest *service_request,
                 pn_contact_set_passport (contact, passport);
 
                 pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+                contact->networkid = 1;
             }
 
             g_free (passport);
         }
         cur = strstr (cur, "<PassportName>");
+    }
+
+    cur = strstr (body, "<Membership><MemberRole>Allow</MemberRole>");
+    if (cur)
+        next = strstr (cur, "</Membership>");
+    while (cur && cur < next)
+    {
+        cur = strstr (cur, "<Email");
+        if (cur)
+        {
+            gchar *end, *email;
+
+            cur = strchr (cur, '>') + 1;
+            end = strstr (cur, "</Email>");
+            email = g_strndup (cur, end - cur);
+
+            {
+                MsnSession *session;
+                struct pn_contact *contact;
+                session = service_request->service_session->session;
+
+                contact = pn_contact_new (session->contactlist);
+                pn_contact_set_passport (contact, email);
+                pn_contact_add_group_id (contact, NULL);
+
+                pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+                contact->networkid = 32;
+            }
+
+            g_free (email);
+        }
+        cur = strstr (cur, "<Email>");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Block</MemberRole>");
@@ -1273,11 +1359,44 @@ process_body_req_memberlists (ServiceRequest *service_request,
                 pn_contact_set_passport (contact, passport);
 
                 pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
+                contact->networkid = 1;
             }
 
             g_free (passport);
         }
         cur = strstr (cur, "<PassportName>");
+    }
+
+    cur = strstr (body, "<Membership><MemberRole>Block</MemberRole>");
+    if (cur)
+        next = strstr (cur, "</Membership>");
+    while (cur && cur < next)
+    {
+        cur = strstr (cur, "<Email");
+        if (cur && cur < next)
+        {
+            gchar *end, *email;
+
+            cur = strchr (cur, '>') + 1;
+            end = strstr (cur, "</Email>");
+            email = g_strndup (cur, end - cur);
+
+            {
+                MsnSession *session;
+                struct pn_contact *contact;
+                session = service_request->service_session->session;
+
+                contact = pn_contact_new (session->contactlist);
+                pn_contact_set_passport (contact, email);
+                pn_contact_add_group_id (contact, NULL);
+
+                pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
+                contact->networkid = 32;
+            }
+
+            g_free (email);
+        }
+        cur = strstr (cur, "<Email>");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Pending</MemberRole>");
@@ -1307,6 +1426,7 @@ process_body_req_memberlists (ServiceRequest *service_request,
                     pn_contact_set_passport (contact, passport);
 
                     pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+                    contact->networkid = 1;
 
                     pn_contactlist_got_new_entry (session,
                                                   contact,
