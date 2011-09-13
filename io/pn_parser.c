@@ -76,10 +76,10 @@ pn_parser_read_line (PnParser *parser,
 
     if (parser->need_more)
     {
-        gchar buf[0x2000 + 1];
+        gchar buf[0x20000 + 1];
         gsize bytes_read;
 
-        status = pn_node_read (parser->node, buf, 0x2000, &bytes_read, NULL);
+        status = pn_node_read (parser->node, buf, 0x20000, &bytes_read, NULL);
 
         if (status != G_IO_STATUS_NORMAL)
             goto leave;
@@ -167,10 +167,10 @@ pn_parser_read (PnParser *parser,
 
     if (parser->need_more)
     {
-        gchar buf[0x2000 + 1];
+        gchar buf[0x20000 + 1];
         gsize bytes_read;
 
-        status = pn_node_read (parser->node, buf, 0x2000, &bytes_read, NULL);
+        status = pn_node_read (parser->node, buf, 0x20000, &bytes_read, NULL);
 
         if (status != G_IO_STATUS_NORMAL)
             goto leave;
