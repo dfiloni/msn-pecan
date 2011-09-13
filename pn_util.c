@@ -975,3 +975,26 @@ pn_parse_date(const char *str)
 
     return mktime (&tm) - timezone;
 }
+
+
+
+char *
+pn_parse_xml_tag (const char *xml, const char *tag_name, char **value)
+{
+    gchar *cur = NULL, *end = NULL, *tag;
+
+    tag = g_strdup_printf ("<%s>", tag_name);
+    cur = strstr (xml, tag);
+    if (cur)
+    {
+        g_free (tag);
+
+        cur = strchr (cur, '>') + 1;
+
+        tag = g_strdup_printf ("</%s>", tag_name);
+        end = strstr (cur, tag);
+        g_free (tag);
+        *value = g_strndup (cur, end - cur);
+    }
+    return end;
+}

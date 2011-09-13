@@ -19,6 +19,7 @@
 
 #include "pn_service.h"
 #include "pn_auth.h"
+#include "pn_util.h"
 #include "io/pn_ssl_conn.h"
 #include "io/pn_parser.h"
 
@@ -1270,38 +1271,31 @@ process_body_req_memberlists (ServiceRequest *service_request,
 {
     gchar *cur, *next = NULL;
     PurpleAccount *account;
+    MsnSession *session;
 
     account = msn_session_get_user_data (service_request->service_session->session);
+    session = service_request->service_session->session;
 
     cur = strstr (body, "<Membership><MemberRole>Allow</MemberRole>");
     if (cur)
         next = strstr (cur, "</Membership>");
     while (cur && cur < next)
     {
-        cur = strstr (cur, "<PassportName>");
-        if (cur)
+        gchar *passport = NULL;
+        cur = pn_parse_xml_tag (cur, "PassportName", &passport);
+        if (passport)
         {
-            gchar *end, *passport;
+            struct pn_contact *contact;
 
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</PassportName>");
-            passport = g_strndup (cur, end - cur);
-
-            {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-
-                contact = pn_contact_new (session->contactlist);
-                pn_contact_set_passport (contact, passport);
-
-                pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
-                contact->networkid = 1;
-            }
+            contact = pn_contact_new (session->contactlist);
+            pn_contact_set_passport (contact, passport);
+            pn_contact_add_group_id (contact, NULL);
+            pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+            contact->networkid = 1;
 
             g_free (passport);
         }
-        cur = strstr (cur, "<PassportName>");
+
     }
 
     cur = strstr (body, "<Membership><MemberRole>Allow</MemberRole>");
@@ -1309,31 +1303,20 @@ process_body_req_memberlists (ServiceRequest *service_request,
         next = strstr (cur, "</Membership>");
     while (cur && cur < next)
     {
-        cur = strstr (cur, "<Email");
-        if (cur)
+        gchar *email = NULL;
+        cur = pn_parse_xml_tag (cur, "Email", &email);
+        if (email)
         {
-            gchar *end, *email;
+            struct pn_contact *contact;
 
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</Email>");
-            email = g_strndup (cur, end - cur);
-
-            {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-
-                contact = pn_contact_new (session->contactlist);
-                pn_contact_set_passport (contact, email);
-                pn_contact_add_group_id (contact, NULL);
-
-                pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
-                contact->networkid = 32;
-            }
+            contact = pn_contact_new (session->contactlist);
+            pn_contact_set_passport (contact, email);
+            pn_contact_add_group_id (contact, NULL);
+            pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+            contact->networkid = 32;
 
             g_free (email);
         }
-        cur = strstr (cur, "<Email>");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Block</MemberRole>");
@@ -1341,30 +1324,20 @@ process_body_req_memberlists (ServiceRequest *service_request,
         next = strstr (cur, "</Membership>");
     while (cur && cur < next)
     {
-        cur = strstr (cur, "<PassportName>");
-        if (cur)
+        gchar *passport = NULL;
+        cur = pn_parse_xml_tag (cur, "PassportName", &passport);
+        if (passport)
         {
-            gchar *end, *passport;
+            struct pn_contact *contact;
 
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</PassportName>");
-            passport = g_strndup (cur, end - cur);
-
-            {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-
-                contact = pn_contact_new (session->contactlist);
-                pn_contact_set_passport (contact, passport);
-
-                pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
-                contact->networkid = 1;
-            }
+            contact = pn_contact_new (session->contactlist);
+            pn_contact_set_passport (contact, passport);
+            pn_contact_add_group_id (contact, NULL);
+            pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
+            contact->networkid = 1;
 
             g_free (passport);
         }
-        cur = strstr (cur, "<PassportName>");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Block</MemberRole>");
@@ -1372,31 +1345,20 @@ process_body_req_memberlists (ServiceRequest *service_request,
         next = strstr (cur, "</Membership>");
     while (cur && cur < next)
     {
-        cur = strstr (cur, "<Email");
-        if (cur && cur < next)
+        gchar *email = NULL;
+        cur = pn_parse_xml_tag (cur, "Email", &email);
+        if (email)
         {
-            gchar *end, *email;
+            struct pn_contact *contact;
 
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</Email>");
-            email = g_strndup (cur, end - cur);
-
-            {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-
-                contact = pn_contact_new (session->contactlist);
-                pn_contact_set_passport (contact, email);
-                pn_contact_add_group_id (contact, NULL);
-
-                pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
-                contact->networkid = 32;
-            }
+            contact = pn_contact_new (session->contactlist);
+            pn_contact_set_passport (contact, email);
+            pn_contact_add_group_id (contact, NULL);
+            pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
+            contact->networkid = 32;
 
             g_free (email);
         }
-        cur = strstr (cur, "<Email>");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Pending</MemberRole>");
@@ -1404,54 +1366,36 @@ process_body_req_memberlists (ServiceRequest *service_request,
         next = strstr (cur, "</Membership>");
     while (cur && cur < next)
     {
-        cur = strstr (cur, "<PassportName>");
-        if (cur)
+        gchar *passport = NULL;
+        cur = pn_parse_xml_tag (cur, "PassportName", &passport);
+        if (passport)
         {
-            gchar *end, *passport;
+            struct pn_contact *contact;
 
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</PassportName>");
-            passport = g_strndup (cur, end - cur);
-
+            contact = pn_contactlist_find_contact (session->contactlist,
+                                                   passport);
+            if (!contact)
             {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
+                contact = pn_contact_new (session->contactlist);
+                pn_contact_set_passport (contact, passport);
+                pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+                contact->networkid = 1;
 
-                contact = pn_contactlist_find_contact (session->contactlist,
-                                                       passport);
-                if (!contact)
-                {
-                    contact = pn_contact_new (session->contactlist);
-                    pn_contact_set_passport (contact, passport);
-
-                    pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
-                    contact->networkid = 1;
-
-                    pn_contactlist_got_new_entry (session,
-                                                  contact,
-                                                  passport);
-                }
+                pn_contactlist_got_new_entry (session,
+                                              contact,
+                                              passport);
             }
 
             g_free (passport);
         }
-        cur = strstr (next, "<PassportName>");
     }
 
-    msn_session_set_prp (service_request->service_session->session,
-                         "MFN", msn_session_get_username (service_request->service_session->session));
+    msn_session_set_prp (session,
+                         "MFN", msn_session_get_username (session));
 
-    cur = strstr (body, "<CreatorCID>");
-    if (cur)
     {
-        gchar *end;
-
-        cur = strchr (cur, '>') + 1;
-        end = strstr (cur, "</CreatorCID>");
-        service_request->service_session->session->cid = g_strndup (cur, end - cur);
-
-        pn_roaming_session_request (service_request->service_session->session->roaming_session,
+        cur = pn_parse_xml_tag (body, "CreatorCID", &session->cid);
+        pn_roaming_session_request (session->roaming_session,
                                     PN_GET_PROFILE, NULL, NULL);
     }
 
@@ -1465,33 +1409,27 @@ process_body_req_ab (ServiceRequest *service_request,
 {
     gchar *cur;
     PurpleAccount *account;
+    MsnSession *session;
 
+    session = service_request->service_session->session;
     account = msn_session_get_user_data (service_request->service_session->session);
 
     cur = strstr (body, "<Group>");
     while (cur)
     {
-        cur = strstr (cur, "<groupId>");
-        if (cur)
+        gchar *guid = NULL;
+        cur = pn_parse_xml_tag (cur, "groupId", &guid);
+        if (guid)
         {
-            gchar *end, *name, *guid;
-
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</groupId>");
-            guid = g_strndup (cur, end - cur);
-
-            cur = strstr (cur, "<name>") + 6;
-            end = strstr (cur, "</name>");
-            name = g_strndup (cur, end - cur);
-
+            gchar *name = NULL;
+            cur = pn_parse_xml_tag (cur, "name", &name);
+            if (name)
             {
-                MsnSession *session;
-                session = service_request->service_session->session;
                 pn_group_new (session->contactlist, name, guid);
+                g_free (name);
             }
 
             g_free (guid);
-            g_free (name);
         }
         cur = strstr (cur, "<Group>");
     }
@@ -1503,39 +1441,25 @@ process_body_req_ab (ServiceRequest *service_request,
         cur = strstr (cur, "<contactInfo><groupIds>");
         if (cur)
         {
-            gchar *end, *guid, *passport, *friendly;
+            gchar *guid = NULL, *passport = NULL, *friendly = NULL;
+            struct pn_contact *contact;
 
-            cur = strstr (cur, "<guid>") + 6;
-            end = strstr (cur, "</guid>");
-            guid = g_strndup (cur, end - cur);
+            cur = pn_parse_xml_tag (cur, "guid", &guid);
+            cur = pn_parse_xml_tag (cur, "passportName", &passport);
+            cur = pn_parse_xml_tag (cur, "displayName", &friendly);
 
-            cur = strstr (cur, "<passportName>") + 14;
-            end = strstr (cur, "</passportName>");
-            passport = g_strndup (cur, end - cur);
-
-            cur = strstr (cur, "<displayName>") + 13;
-            end = strstr (cur, "</displayName>");
-            friendly = g_strndup (cur, end - cur);
-
+            contact = pn_contactlist_find_contact (session->contactlist,
+                                                   passport);
+            if (!contact)
             {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-
-                contact = pn_contactlist_find_contact (session->contactlist,
-                                                       passport);
-                if (!contact)
-                {
-                    contact = pn_contact_new (session->contactlist);
-                    pn_contact_set_passport (contact, passport);
-
-                    pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
-                    purple_privacy_deny_remove (account, passport, TRUE);
-                    purple_privacy_permit_add (account, passport, TRUE);
-                }
-                pn_contact_set_friendly_name (contact, friendly);
-                pn_contact_add_group_id (contact, guid);
+                contact = pn_contact_new (session->contactlist);
+                pn_contact_set_passport (contact, passport);
+                pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+                purple_privacy_deny_remove (account, passport, TRUE);
+                purple_privacy_permit_add (account, passport, TRUE);
             }
+            pn_contact_set_friendly_name (contact, friendly);
+            pn_contact_add_group_id (contact, guid);
 
             g_free (guid);
             g_free (passport);
@@ -1549,35 +1473,24 @@ process_body_req_ab (ServiceRequest *service_request,
         cur = strstr (cur, "<contactInfo><contactType>");
         if (cur)
         {
-            gchar *end, *passport, *friendly;
+            gchar *passport = NULL, *friendly = NULL;
+            struct pn_contact *contact;
 
-            cur = strstr (cur, "<passportName>") + 14;
-            end = strstr (cur, "</passportName>");
-            passport = g_strndup (cur, end - cur);
+            cur = pn_parse_xml_tag (cur, "passportName", &passport);
+            cur = pn_parse_xml_tag (cur, "displayName", &friendly);
 
-            cur = strstr (cur, "<displayName>") + 13;
-            end = strstr (cur, "</displayName>");
-            friendly = g_strndup (cur, end - cur);
-
+            contact = pn_contactlist_find_contact (session->contactlist,
+                                                   passport);
+            if (!contact)
             {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-
-                contact = pn_contactlist_find_contact (session->contactlist,
-                                                       passport);
-                if (!contact)
-                {
-                    contact = pn_contact_new (session->contactlist);
-                    pn_contact_set_passport (contact, passport);
-
-                    pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
-                    purple_privacy_deny_remove (account, passport, TRUE);
-                    purple_privacy_permit_add (account, passport, TRUE);
-                }
-                pn_contact_set_friendly_name (contact, friendly);
-                pn_contact_add_group_id (contact, NULL);
+                contact = pn_contact_new (session->contactlist);
+                pn_contact_set_passport (contact, passport);
+                pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+                purple_privacy_deny_remove (account, passport, TRUE);
+                purple_privacy_permit_add (account, passport, TRUE);
             }
+            pn_contact_set_friendly_name (contact, friendly);
+            pn_contact_add_group_id (contact, NULL);
 
             g_free (passport);
             g_free (friendly);
@@ -1587,30 +1500,21 @@ process_body_req_ab (ServiceRequest *service_request,
     cur = strstr (body, "<Contact>");
     while (cur)
     {
-        cur = strstr (cur, "<contactId>");
-        if (cur)
+        gchar *contact_id = NULL;
+        cur = pn_parse_xml_tag (cur, "contactId", &contact_id);
+        if (contact_id)
         {
-            gchar *end, *contact_id, *passport;
+            gchar *passport = NULL;
+            struct pn_contact *contact;
 
-            cur = strchr (cur, '>') + 1;
-            end = strstr (cur, "</contactId>");
-            contact_id = g_strndup (cur, end - cur);
+            cur = pn_parse_xml_tag (cur, "passportName", &passport);
 
-            cur = strstr (cur, "<passportName>") + 14;
-            end = strstr (cur, "</passportName>");
-            passport = g_strndup (cur, end - cur);
-
-            {
-                MsnSession *session;
-                struct pn_contact *contact;
-                session = service_request->service_session->session;
-                contact = pn_contactlist_find_contact (session->contactlist,
-                                                       passport);
-                if (contact)
-                    contact->guid = contact_id;
-                else
-                    g_free (contact_id);
-            }
+            contact = pn_contactlist_find_contact (session->contactlist,
+                                                   passport);
+            if (contact)
+                contact->guid = contact_id;
+            else
+                g_free (contact_id);
 
             g_free (passport);
         }
@@ -1628,11 +1532,8 @@ process_body_add_contact (ServiceRequest *service_request,
     cur = strstr (body, "<ABContactAddResult><guid>");
     if (cur)
     {
-        gchar *guid, *end;
-
-        cur = strstr (cur, "<guid>") + 6;
-        end = strstr (cur, "</guid>");
-        guid = g_strndup (cur, end - cur);
+        gchar *guid = NULL;
+        cur = pn_parse_xml_tag (cur, "guid", &guid);
 
         if (guid)
         {
@@ -1645,10 +1546,10 @@ process_body_add_contact (ServiceRequest *service_request,
             {
                 contact->guid = guid;
                 if (service_request->value)
-                    pn_service_session_request  (session->service_session,
-                                                 PN_ADD_CONTACT_GROUP,
-                                                 service_request->value,
-                                                 guid, NULL);
+                    pn_service_session_request (session->service_session,
+                                                PN_ADD_CONTACT_GROUP,
+                                                service_request->value,
+                                                guid, NULL);
             }
             else
                 g_free (guid);
@@ -1665,11 +1566,8 @@ process_body_add_group (ServiceRequest *service_request,
     cur = strstr (body, "<ABGroupAddResult><guid>");
     if (cur)
     {
-        gchar *guid, *end;
-
-        cur = strstr (cur, "<guid>") + 6;
-        end = strstr (cur, "</guid>");
-        guid = g_strndup (cur, end - cur);
+        gchar *guid = NULL;
+        cur = pn_parse_xml_tag (cur, "guid", &guid);
 
         if (guid)
         {
@@ -1678,11 +1576,12 @@ process_body_add_group (ServiceRequest *service_request,
 
             pn_group_new (session->contactlist, service_request->value, guid);
 
-            if (service_request->data != NULL)
+            if (service_request->data)
             {
                 gchar *old_group_name = g_strdup (service_request->data);
 
-                pn_contactlist_move_buddy (session->contactlist, service_request->extra_value,
+                pn_contactlist_move_buddy (session->contactlist,
+                                           service_request->extra_value,
                                            old_group_name,
                                            service_request->value);
 
@@ -1748,16 +1647,13 @@ read_cb (PnNode *conn,
         pn_debug ("%s", body);
 
         {
-            gchar *cur, *end;
+            gchar *cur;
             cur = strstr (body, "<CacheKeyChanged>true</CacheKeyChanged>");
             if (cur)
             {
-                cur = strstr (body, "<CacheKey>") + 10;
-                end = strstr (cur, "</CacheKey>");
-
-                if (service_request->service_session->cachekey)
-                    g_free (service_request->service_session->cachekey);
-                service_request->service_session->cachekey = g_strndup (cur, end - cur);
+                g_free (service_request->service_session->cachekey);
+                cur = pn_parse_xml_tag (cur, "CacheKey",
+                                        &service_request->service_session->cachekey);
             }
         }
 

@@ -71,4 +71,6 @@ char *pn_html_unescape(const char *str);
 char *pn_rand_guid(void);
 time_t pn_parse_date(const char *str);
 
+char *pn_parse_xml_tag (const char *xml, const char *tag_name, char **value);
+
 #endif /* PN_UTIL_H */
