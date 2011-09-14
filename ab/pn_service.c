@@ -1159,54 +1159,6 @@ next_request (PecanServiceSession *service_session)
     service_process_requests (service_session);
 }
 
-static inline void
-send_login_fqy_command (struct MsnSession *session)
-{
-    PurpleAccount *account;
-    GSList *buddies;
-    gchar *payload;
-    MsnCmdProc *cmdproc;
-    MsnTransaction *trans;
-
-    cmdproc = session->notification->cmdproc;
-
-    account = msn_session_get_user_data (session);
-    payload = g_strdup ("<ml l=\"1\">");
-
-    buddies = purple_find_buddies (account, NULL);
-    for (buddies = purple_find_buddies (account, NULL); buddies;
-         buddies = g_slist_delete_link (buddies, buddies))
-    {
-        PurpleBuddy *buddy = buddies->data;
-        const gchar *buddy_name = purple_buddy_get_name (buddy);
-        struct pn_contact *contact;
-
-        contact = pn_contactlist_find_contact (session->contactlist, buddy_name);
-
-        if (contact && contact->networkid == 32)
-        {
-            gchar *domain, *name;
-
-            domain = strchr (buddy_name, '@');
-            name = g_strndup (buddy_name, domain - buddy_name);
-
-            payload = g_strdup_printf ("<ml>"
-                                       "<d n=\"%s\">"
-                                       "<c n=\"%s\" />"
-                                       "</d>"
-                                       "</ml>",
-                                       domain + 1,
-                                       name);
-
-            trans = msn_transaction_new (cmdproc, "FQY", "%zu", strlen (payload));
-            msn_transaction_set_payload (trans, payload, strlen (payload));
-            msn_cmdproc_send_trans (cmdproc, trans);
-
-            g_free (name);
-        }
-    }
-}
-
 /* Send ADL */
 /* TODO: rewrite this. Also this should be < 7500 bytes, if it isn't send two (or more) ADL */
 static inline void
@@ -1261,8 +1213,6 @@ send_login_adl_command (struct MsnSession *session)
     trans = msn_transaction_new (cmdproc, "ADL", "%zu", strlen (payload));
     msn_transaction_set_payload (trans, payload, strlen (payload));
     msn_cmdproc_send_trans (cmdproc, trans);
-
-    send_login_fqy_command (session);
 }
 
 static void

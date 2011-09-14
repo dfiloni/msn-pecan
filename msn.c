@@ -216,7 +216,7 @@ static void
 msn_set_prp(PurpleConnection *gc, const char *type, const char *entry)
 {
     if (entry && *entry == '\0')
-	entry = NULL;
+        entry = NULL;
 
     msn_session_set_prp (gc->proto_data, type, entry);
 }
@@ -613,7 +613,7 @@ list_emblems (PurpleBuddy *b)
         return "bot";
 
     if (contact && pn_contact_get_network_id (contact) == 32)
-	    return "yahoo";
+        return "yahoo";
 
     if (contact && contact->mobile)
         return "mobile";
@@ -1112,14 +1112,14 @@ send_uum_msg (MsnSession *session,
               const gchar *who,
               MsnMessage *msg)
 {
-	MsnCmdProc *cmdproc;
-	MsnTransaction *trans;
-	char *payload;
-	gsize payload_len;
-	gint type;
+    MsnCmdProc *cmdproc;
+    MsnTransaction *trans;
+    char *payload;
+    gsize payload_len;
+    gint type;
 
     cmdproc = session->notification->cmdproc;
-	payload = msn_message_gen_payload (msg, &payload_len);
+    payload = msn_message_gen_payload (msg, &payload_len);
     type = msg->type;
 
     trans = msn_transaction_new (cmdproc, "UUM", "%s 32 %d %zu",
