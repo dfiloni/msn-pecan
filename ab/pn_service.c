@@ -1220,10 +1220,9 @@ process_body_req_memberlists (ServiceRequest *service_request,
                               char *body)
 {
     gchar *cur, *next = NULL;
-    PurpleAccount *account;
     MsnSession *session;
 
-    account = msn_session_get_user_data (service_request->service_session->session);
+
     session = service_request->service_session->session;
 
     cur = strstr (body, "<Membership><MemberRole>Allow</MemberRole>");
@@ -1239,7 +1238,6 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, passport);
-            pn_contact_add_group_id (contact, NULL);
             pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
             contact->networkid = 1;
 
@@ -1261,7 +1259,6 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, email);
-            pn_contact_add_group_id (contact, NULL);
             pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
             contact->networkid = 32;
 
@@ -1282,7 +1279,6 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, passport);
-            pn_contact_add_group_id (contact, NULL);
             pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
             contact->networkid = 1;
 
@@ -1303,7 +1299,6 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, email);
-            pn_contact_add_group_id (contact, NULL);
             pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
             contact->networkid = 32;
 
@@ -1351,6 +1346,14 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
     pn_service_session_request (service_request->service_session,
                                 PN_REQ_AB, NULL, NULL, NULL);
+}
+
+static void
+contact_group (struct pn_contact *contact,
+               gpointer user_data)
+{
+    if (pn_contact_get_group_count (contact) == 0)
+        pn_contact_add_group_id (contact, NULL);
 }
 
 static void
@@ -1440,7 +1443,6 @@ process_body_req_ab (ServiceRequest *service_request,
                 purple_privacy_permit_add (account, passport, TRUE);
             }
             pn_contact_set_friendly_name (contact, friendly);
-            pn_contact_add_group_id (contact, NULL);
 
             g_free (passport);
             g_free (friendly);
@@ -1469,6 +1471,9 @@ process_body_req_ab (ServiceRequest *service_request,
             g_free (passport);
         }
     }
+
+     pn_contactlist_foreach_contact (session->contactlist,
+                                     contact_group, NULL);
 
     send_login_adl_command (service_request->service_session->session);
 }
