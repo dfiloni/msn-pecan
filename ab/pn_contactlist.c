@@ -570,10 +570,10 @@ pn_contactlist_add_buddy_helper (struct pn_contact_list *contactlist,
 
     {
         struct pn_contact *contact;
-        int list_id;
+        /* int list_id; */
         const gchar *group_guid = NULL;
 
-        list_id = MSN_LIST_FL;
+        /* list_id = MSN_LIST_FL; */
         contact = pn_contactlist_find_contact (contactlist, who);
 
         if (group_name)

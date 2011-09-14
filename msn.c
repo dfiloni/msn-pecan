@@ -1523,12 +1523,7 @@ add_permit (PurpleConnection *gc,
             const gchar *who)
 {
     MsnSession *session;
-    struct pn_contact_list *contactlist;
-    struct pn_contact *user;
-
     session = gc->proto_data;
-    contactlist = session->contactlist;
-    user = pn_contactlist_find_contact (contactlist, who);
 
     if (!session->logged_in)
     {
@@ -1547,12 +1542,7 @@ add_deny (PurpleConnection *gc,
           const gchar *who)
 {
     MsnSession *session;
-    struct pn_contact_list *contactlist;
-    struct pn_contact *user;
-
     session = gc->proto_data;
-    contactlist = session->contactlist;
-    user = pn_contactlist_find_contact (contactlist, who);
 
     if (!session->logged_in)
     {
@@ -1571,10 +1561,7 @@ rem_permit (PurpleConnection *gc,
             const gchar *who)
 {
     MsnSession *session;
-    struct pn_contact_list *contactlist;
-
     session = gc->proto_data;
-    contactlist = session->contactlist;
 
     if (!session->logged_in)
     {
@@ -1593,10 +1580,7 @@ rem_deny (PurpleConnection *gc,
           const gchar *who)
 {
     MsnSession *session;
-    struct pn_contact_list *contactlist;
-
     session = gc->proto_data;
-    contactlist = session->contactlist;
 
     if (!session->logged_in)
     {

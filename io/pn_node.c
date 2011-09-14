@@ -347,11 +347,9 @@ connect_cb(GObject *source,
     g_object_ref(conn);
 
     if (socket_conn) {
-        GSocket *socket;
         GInputStream *input;
 
         conn->socket_conn = socket_conn;
-        socket = g_socket_connection_get_socket(socket_conn);
 
         conn->status = PN_NODE_STATUS_OPEN;
 
