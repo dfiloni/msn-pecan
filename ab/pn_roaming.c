@@ -19,6 +19,7 @@
 
 #include "pn_roaming.h"
 #include "pn_auth.h"
+#include "pn_util.h"
 #include "io/pn_ssl_conn.h"
 #include "io/pn_parser.h"
 
@@ -327,51 +328,27 @@ static void
 process_get_profile (RoamingRequest *roaming_request,
                      char *body)
 {
-    gchar *cur, *end, *value;
+    gchar *value;
 
-    cur = strstr (body, "<ResourceID>");
-    if (cur)
+    pn_parse_xml_tag (body, "ResourceID", 
+                      &roaming_request->roaming_session->resource_id);
+
+    pn_parse_xml_tag (body, "DisplayName", &value);
+    if (value)
     {
-
-        cur = strchr (cur, '>') + 1;
-        end = strstr (cur, "</ResourceID>");
-        roaming_request->roaming_session->resource_id = g_strndup (cur, end - cur);
-    }
-
-    cur = strstr (body, "<DisplayName>");
-    if (cur)
-    {
-
-        cur = strchr (cur, '>') + 1;
-        end = strstr (cur, "</DisplayName>");
-        value = g_strndup (cur, end - cur);
-
-        if (value)
-        {
-            msn_session_set_prp (roaming_request->roaming_session->session,
-                                 "MFN", value);
-
-            g_free (value);
-        }
+        msn_session_set_prp (roaming_request->roaming_session->session,
+                             "MFN", value);
+        g_free (value);
     }
 
 #ifndef PECAN_USE_PSM
-    cur = strstr (body, "<PersonalStatus>");
-    if (cur)
+    pn_parse_xml_tag (body, "PersonalStatus", &value);
+    if (value)
     {
         PurpleAccount *account;
         account = msn_session_get_user_data (roaming_request->roaming_session->session);
-
-        cur = strchr (cur, '>') + 1;
-        end = strstr (cur, "</PersonalStatus>");
-        value = g_strndup (cur, end - cur);
-
-        if (value)
-        {
-            purple_account_set_string(account, "personal_message", value);
-
-            g_free (value);
-        }
+        purple_account_set_string (account, "personal_message", value);
+        g_free (value);
     }
 #endif /* PECAN_USE_PSM */
 }
@@ -431,16 +408,12 @@ read_cb (PnNode *conn,
 
         if (roaming_request->type == PN_GET_PROFILE)
         {
-            gchar *cur, *end;
-            cur = strstr (body, "<CacheKey>");
-            if (cur)
+            char *cachekey;
+            pn_parse_xml_tag (body, "CacheKey", &cachekey);
+            if (cachekey)
             {
-                cur = strchr (cur, '>') + 1;
-                end = strstr (cur, "</CacheKey>");
-
-                if (roaming_request->roaming_session->cachekey)
-                    g_free (roaming_request->roaming_session->cachekey);
-                roaming_request->roaming_session->cachekey = g_strndup (cur, end - cur);
+                g_free (roaming_request->roaming_session->cachekey);
+                roaming_request->roaming_session->cachekey = cachekey;
             }
         }
 
