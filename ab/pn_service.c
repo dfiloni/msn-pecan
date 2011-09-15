@@ -286,6 +286,23 @@ send_add_contact_request (PnNode *conn,
     gsize body_len;
     PnAuth *auth = service_request->service_session->session->auth;
     gchar *cachekey = service_request->service_session->cachekey;
+    gchar *contact_info;
+
+    if (strcmp (service_request->extra_value, "yahoo") == 0)
+        contact_info = g_strdup_printf ("<emails><ContactEmail>\r\n"
+                                        "<contactEmailType>Messenger2</contactEmailType>\r\n"
+                                        "<email>%s</email>\r\n"
+                                        "<isMessengerEnabled>true</isMessengerEnabled>\r\n"
+                                        "<Capability>0</Capability>\r\n"
+                                        "<MessengerEnabledExternally>false</MessengerEnabledExternally>\r\n"
+                                        "<propertiesChanged/>\r\n"
+                                        "</ContactEmail></emails>\r\n",
+                                        service_request->value);
+    else
+        contact_info = g_strdup_printf ("<contactType>LivePending</contactType>\r\n"
+                                        "<passportName>%s</passportName>\r\n"
+                                        "<isMessengerUser>true</isMessengerUser>\r\n",
+                                        service_request->value);
 
     pn_log ("begin");
 
@@ -309,9 +326,7 @@ send_add_contact_request (PnNode *conn,
                             "<contacts>\r\n"
                             "<Contact xmlns=\"http://www.msn.com/webservices/AddressBook\">\r\n"
                             "<contactInfo>\r\n"
-                            "<contactType>LivePending</contactType>\r\n"
-                            "<passportName>%s</passportName>\r\n"
-                            "<isMessengerUser>true</isMessengerUser>\r\n"
+                            "%s"
                             "</contactInfo>\r\n"
                             "</Contact>\r\n"
                             "</contacts>\r\n"
@@ -325,7 +340,9 @@ send_add_contact_request (PnNode *conn,
                             cachekey ? cachekey : "",
                             cachekey ? "</CacheKey>" : "",
                             auth->security_token.contacts_msn_com,
-                            service_request->value);
+                            contact_info);
+
+    g_free (contact_info);
 
     body_len = strlen (body);
 
@@ -441,7 +458,7 @@ rm_role_contact_request (PnNode *conn,
     gsize body_len;
     PnAuth *auth = service_request->service_session->session->auth;
     gchar *cachekey = service_request->service_session->cachekey;
-    gchar *member_role;
+    gchar *member_role, *member;
 
     if (service_request->type == PN_RM_CONTACT_ALLOW)
         member_role = "Allow";
@@ -449,6 +466,21 @@ rm_role_contact_request (PnNode *conn,
         member_role = "Block";
     else if (service_request->type == PN_RM_CONTACT_PENDING)
         member_role = "Pending";
+
+    if (strcmp (service_request->extra_value, "yahoo") == 0)
+        member = g_strdup_printf ("<Member xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"EmailMember\">\r\n"
+                                  "<Type>Email</Type>\r\n"
+                                  "<State>Accepted</State>\r\n"
+                                  "<Email>%s</Email>\r\n"
+                                  "</Member>\r\n",
+                                  service_request->value);
+    else
+        member = g_strdup_printf ("<Member xsi:type=\"PassportMember\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\r\n"
+                                  "<Type>Passport</Type>\r\n"
+                                  "<State>Accepted</State>\r\n"
+                                  "<PassportName>%s</PassportName>\r\n"
+                                  "</Member>\r\n",
+                                  service_request->value);
 
     pn_log ("begin");
 
@@ -477,11 +509,7 @@ rm_role_contact_request (PnNode *conn,
                             "<Membership>\r\n"
                             "<MemberRole>%s</MemberRole>\r\n"
                             "<Members>\r\n"
-                            "<Member xsi:type=\"PassportMember\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\r\n"
-                            "<Type>Passport</Type>\r\n"
-                            "<State>Accepted</State>\r\n"
-                            "<PassportName>%s</PassportName>\r\n"
-                            "</Member>\r\n"
+                            "%s"
                             "</Members>\r\n"
                             "</Membership>\r\n"
                             "</memberships>\r\n"
@@ -493,7 +521,7 @@ rm_role_contact_request (PnNode *conn,
                             cachekey ? "</CacheKey>" : "",
                             auth->security_token.contacts_msn_com,
                             member_role,
-                            service_request->value);
+                            member);
 
     body_len = strlen (body);
 
@@ -534,7 +562,7 @@ add_role_contact_request (PnNode *conn,
     gsize body_len;
     PnAuth *auth = service_request->service_session->session->auth;
     gchar *cachekey = service_request->service_session->cachekey;
-    gchar *member_role;
+    gchar *member_role, *member;
 
     if (service_request->type == PN_ADD_CONTACT_ALLOW)
         member_role = "Allow";
@@ -542,6 +570,21 @@ add_role_contact_request (PnNode *conn,
         member_role = "Block";
     else if (service_request->type == PN_ADD_CONTACT_PENDING)
         member_role = "Pending";
+
+    if (strcmp (service_request->extra_value, "yahoo") == 0)
+        member = g_strdup_printf ("<Member xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"EmailMember\">\r\n"
+                                  "<Type>Email</Type>\r\n"
+                                  "<State>Accepted</State>\r\n"
+                                  "<Email>%s</Email>\r\n"
+                                  "</Member>\r\n",
+                                  service_request->value);
+    else
+        member = g_strdup_printf ("<Member xsi:type=\"PassportMember\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\r\n"
+                                  "<Type>Passport</Type>\r\n"
+                                  "<State>Accepted</State>\r\n"
+                                  "<PassportName>%s</PassportName>\r\n"
+                                  "</Member>\r\n",
+                                  service_request->value);
 
     pn_log ("begin");
 
@@ -570,11 +613,7 @@ add_role_contact_request (PnNode *conn,
                             "<Membership>\r\n"
                             "<MemberRole>%s</MemberRole>\r\n"
                             "<Members>\r\n"
-                            "<Member xsi:type=\"PassportMember\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\r\n"
-                            "<Type>Passport</Type>\r\n"
-                            "<State>Accepted</State>\r\n"
-                            "<PassportName>%s</PassportName>\r\n"
-                            "</Member>\r\n"
+                            "%s"
                             "</Members>\r\n"
                             "</Membership>\r\n"
                             "</memberships>\r\n"
@@ -586,7 +625,7 @@ add_role_contact_request (PnNode *conn,
                             cachekey ? "</CacheKey>" : "",
                             auth->security_token.contacts_msn_com,
                             member_role,
-                            service_request->value);
+                            member);
 
     body_len = strlen (body);
 
