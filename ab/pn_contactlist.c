@@ -63,8 +63,9 @@ msn_accept_add_cb (gpointer data)
     passport = pn_contact_get_passport (contact);
 
     pn_service_session_request (contact->contactlist->session->service_session,
-                                PN_ADD_CONTACT_ALLOW,
-                                passport, NULL, NULL);
+                                PN_ADD_CONTACT_ALLOW, passport,
+                                contact->networkid == 32 ? "yahoo" : NULL,
+                                NULL);
 
     g_free (pa);
 }
@@ -80,8 +81,9 @@ msn_cancel_add_cb (gpointer data)
     passport = pn_contact_get_passport (contact);
 
     pn_service_session_request (contact->contactlist->session->service_session,
-                                PN_ADD_CONTACT_BLOCK,
-                                passport, NULL, NULL);
+                                PN_ADD_CONTACT_BLOCK, passport,
+                                contact->networkid == 32 ? "yahoo" : NULL,
+                                NULL);
 
     g_free (pa);
 }
@@ -99,8 +101,9 @@ pn_contactlist_got_new_entry (struct MsnSession *session,
     passport = pn_contact_get_passport (contact);
 
     pn_service_session_request (session->service_session,
-                                PN_RM_CONTACT_PENDING,
-                                passport, NULL, NULL);
+                                PN_RM_CONTACT_PENDING, passport,
+                                contact->networkid == 32 ? "yahoo" : NULL,
+                                NULL);
 
     pa = g_new0 (MsnPermitAdd, 1);
     pa->session = session;

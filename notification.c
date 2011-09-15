@@ -60,9 +60,11 @@ static MsnTable *cbs_table;
 
 typedef struct
 {
-    gchar *who;
+    gchar *domain;
+    gchar *name;
+    ServiceRequestType soap_type;
     gchar *group_guid;
-} MsnAddBuddy;
+} FQYTransData;
 
 static void
 open_cb (PnNode *conn,
@@ -340,6 +342,46 @@ usr_error(MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
     }
 
     msn_session_set_error(cmdproc->session, msnerr, NULL);
+}
+
+static void
+add_contact_pending (struct MsnSession *session, char *email, int network_id,
+                     ServiceRequestType soap_type, gchar *group_guid)
+{
+    struct pn_contact *contact;
+
+    pn_service_session_request (session->service_session,
+                                soap_type, email,
+                                network_id == 32 ? "yahoo" : NULL, group_guid);
+
+    contact = pn_contact_new (session->contactlist);
+    pn_contact_set_passport (contact, email);
+    pn_contact_set_network_id (contact, network_id);
+    pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+    pn_contactlist_got_new_entry (session, contact, email);
+}
+
+static void
+fqy_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
+{
+    if (error == 508)
+    {
+        FQYTransData *data;
+        char *email;
+
+        data = trans->data;
+        email = g_strdup_printf ("%s@%s", data->name, data->domain);
+        add_contact_pending (cmdproc->session, email,
+                             strstr (email, "@yahoo.") ? 32 : 1,
+                             data->soap_type, data->group_guid);
+        g_free (email);
+        g_free (data->domain);
+        g_free (data->name);
+        g_free (data->group_guid);
+    }
+    else
+        pn_warning ("command=[%s],error=%i",
+                    msn_transaction_to_string (trans), error);
 }
 
 static void
@@ -787,40 +829,24 @@ adl_cmd_read_payload (MsnCmdProc *cmdproc,
                       gchar *payload,
                       gsize len)
 {
-    MsnSession *session;
-    struct pn_contact *contact;
     gchar *cur, *end, *domain, *name, *email, *t;
-
-    session = cmdproc->session;
 
     cur = strstr (payload, "<d n=\"") + 6;
     end = strchr (cur, '\"');
     domain = g_strndup (cur, end - cur);
-
     cur = strstr (end, "<c n=\"") + 6;
     end = strchr (cur, '\"');
     name = g_strndup (cur, end - cur);
-
     cur = strstr (end, "t=\"") + 3;
     end = strchr (cur, '\"');
     t = g_strndup (cur, end - cur);
 
     email = g_strdup_printf ("%s@%s", name, domain);
-
-    if (strcmp (t, "32") != 0)
-    {
-        pn_service_session_request (session->service_session,
-                                    PN_ADD_CONTACT_PENDING,
-                                    email, NULL, NULL);
-
-        contact = pn_contact_new (session->contactlist);
-        pn_contact_set_passport (contact, email);
-        pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
-        pn_contactlist_got_new_entry (session, contact, email);
-    }
-
     g_free (domain);
     g_free (name);
+
+    add_contact_pending (cmdproc->session, email, atoi (t),
+                         PN_ADD_CONTACT_PENDING, NULL);
     g_free (t);
     g_free (email);
 }
@@ -846,10 +872,34 @@ adl_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 }
 
 static void
+fqy_cmd_post (MsnCmdProc *cmdproc,
+              MsnCommand *cmd,
+              gchar *payload,
+              gsize len)
+{
+    FQYTransData *data;
+    char *cur, *end, *t, *email;
+
+    data = cmd->trans->data;
+    cur = strstr (payload, "t=\"") + 3;
+    end = strchr (cur, '\"');
+    t = g_strndup (cur, end - cur);
+
+    email = g_strdup_printf ("%s@%s", data->name, data->domain);
+    add_contact_pending (cmdproc->session, email, atoi (t),
+                         data->soap_type, data->group_guid);
+    g_free (email);
+    g_free (t);
+    g_free (data->domain);
+    g_free (data->name);
+    g_free (data->group_guid);
+}
+
+static void
 fqy_cmd (MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
+    cmdproc->last_cmd->payload_cb = fqy_cmd_post;
     cmd->payload_len = atoi(cmd->params[1]);
-    cmdproc->last_cmd->payload_cb = NULL;
 }
 
 static void
@@ -1510,8 +1560,25 @@ msn_notification_add_buddy(MsnNotification *notification, const char *list,
     {
         /* Add buddy to our FL. */
         /* FunkTastic Foo! */
-        pn_service_session_request  (cmdproc->session->service_session,
-                                     PN_ADD_CONTACT, who, group_guid, NULL);
+        FQYTransData *data;
+        gchar *payload, *tmp;
+        MsnTransaction *trans;
+        data = g_new0 (FQYTransData, 1);
+        tmp = strchr (who, '@') + 1;
+        data->domain = g_strdup (tmp);
+        data->name = g_strndup (who, tmp - who - 1);
+        data->soap_type = PN_ADD_CONTACT;
+        data->group_guid = group_guid ? g_strdup (group_guid) : NULL;
+
+        payload = g_strdup_printf ("<ml><d n=\"%s\">"
+                                   "<c n=\"%s\" /></d></ml>",
+                                   data->domain,
+                                   data->name);
+
+        trans = msn_transaction_new (cmdproc, "FQY", "%zu", strlen (payload));
+        msn_transaction_set_payload (trans, payload, strlen (payload));
+        msn_transaction_set_data (trans, data);
+        msn_cmdproc_send_trans (cmdproc, trans);
     }
 }
 
@@ -1597,6 +1664,7 @@ msn_notification_init(void)
 
     /* msn_table_add_error(cbs_table, "REA", rea_error); */
     msn_table_add_error(cbs_table, "USR", usr_error);
+    msn_table_add_error(cbs_table, "FQY", fqy_error);
 
     msn_table_add_msg_type(cbs_table,
                            "text/plain",

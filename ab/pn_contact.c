@@ -870,3 +870,9 @@ pn_contact_get_network_id (struct pn_contact *contact)
 {
     return contact->networkid;
 }
+
+void
+pn_contact_set_network_id (struct pn_contact *contact, int network_id)
+{
+    contact->networkid = network_id;
+}

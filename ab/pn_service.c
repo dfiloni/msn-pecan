@@ -1545,7 +1545,7 @@ process_body_add_contact (ServiceRequest *service_request,
                     pn_service_session_request (session->service_session,
                                                 PN_ADD_CONTACT_GROUP,
                                                 service_request->value,
-                                                guid, NULL);
+                                                service_request->data, NULL);
             }
             else
                 g_free (guid);
@@ -1663,12 +1663,14 @@ read_cb (PnNode *conn,
         else if (service_request->type == PN_RM_CONTACT_ALLOW)
             pn_service_session_request (service_request->service_session,
                                         PN_ADD_CONTACT_BLOCK,
-                                        service_request->value, NULL, NULL);
+                                        service_request->value,
+                                        service_request->extra_value, NULL);
         /* else if (service_request->type == PN_ADD_CONTACT_BLOCK) */
         else if (service_request->type == PN_RM_CONTACT_BLOCK)
             pn_service_session_request (service_request->service_session,
                                         PN_ADD_CONTACT_ALLOW,
-                                        service_request->value, NULL, NULL);
+                                        service_request->value,
+                                        service_request->extra_value, NULL);
         /* else if (service_request->type == PN_ADD_CONTACT_ALLOW) */
         /* else if (service_request->type == PN_RM_CONTACT_PENDING) */
         /* else if (service_request->type == PN_ADD_CONTACT_PENDING) */

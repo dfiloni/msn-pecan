@@ -1524,6 +1524,7 @@ add_permit (PurpleConnection *gc,
 {
     MsnSession *session;
     session = gc->proto_data;
+    struct pn_contact *contact;
 
     if (!session->logged_in)
     {
@@ -1531,10 +1532,16 @@ add_permit (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
+    contact = pn_contactlist_find_contact (session->contactlist, who);
+    if (!contact)
+        return;
+
     set_permit_command (session, who, MSN_LIST_AL_OP);
 
     pn_service_session_request  (session->service_session,
-                                 PN_RM_CONTACT_BLOCK, who, NULL, NULL);
+                                 PN_RM_CONTACT_BLOCK, who,
+                                 contact->networkid == 32 ? "yahoo" : NULL,
+                                 NULL);
 }
 
 static void
@@ -1543,6 +1550,7 @@ add_deny (PurpleConnection *gc,
 {
     MsnSession *session;
     session = gc->proto_data;
+    struct pn_contact *contact;
 
     if (!session->logged_in)
     {
@@ -1550,10 +1558,16 @@ add_deny (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
+    contact = pn_contactlist_find_contact (session->contactlist, who);
+    if (!contact)
+        return;
+
     set_permit_command (session, who, MSN_LIST_BL_OP);
 
     pn_service_session_request  (session->service_session,
-                                 PN_RM_CONTACT_ALLOW, who, NULL, NULL);
+                                 PN_RM_CONTACT_ALLOW, who,
+                                 contact->networkid == 32 ? "yahoo" : NULL,
+                                 NULL);
 }
 
 static void
@@ -1562,6 +1576,7 @@ rem_permit (PurpleConnection *gc,
 {
     MsnSession *session;
     session = gc->proto_data;
+    struct pn_contact *contact;
 
     if (!session->logged_in)
     {
@@ -1569,10 +1584,16 @@ rem_permit (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
+    contact = pn_contactlist_find_contact (session->contactlist, who);
+    if (!contact)
+        return;
+
     set_permit_command (session, who, MSN_LIST_BL_OP);
 
     pn_service_session_request  (session->service_session,
-                                 PN_RM_CONTACT_ALLOW, who, NULL, NULL);
+                                 PN_RM_CONTACT_ALLOW, who,
+                                 contact->networkid == 32 ? "yahoo" : NULL,
+                                 NULL);
 }
 
 static void
@@ -1581,6 +1602,7 @@ rem_deny (PurpleConnection *gc,
 {
     MsnSession *session;
     session = gc->proto_data;
+    struct pn_contact *contact;
 
     if (!session->logged_in)
     {
@@ -1588,10 +1610,16 @@ rem_deny (PurpleConnection *gc,
         g_return_if_reached ();
     }
 
+    contact = pn_contactlist_find_contact (session->contactlist, who);
+    if (!contact)
+        return;
+
     set_permit_command (session, who, MSN_LIST_AL_OP);
 
     pn_service_session_request  (session->service_session,
-                                 PN_RM_CONTACT_BLOCK, who, NULL, NULL);
+                                 PN_RM_CONTACT_BLOCK, who,
+                                 contact->networkid == 32 ? "yahoo" : NULL,
+                                 NULL);
 }
 
 static void
