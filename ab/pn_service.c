@@ -1391,7 +1391,9 @@ static void
 contact_group (struct pn_contact *contact,
                gpointer user_data)
 {
-    if (pn_contact_get_group_count (contact) == 0)
+    MsnSession *session = user_data;
+    if (pn_contact_get_group_count (contact) == 0 &&
+        strcmp (contact->passport, session->username) != 0)
         pn_contact_add_group_id (contact, NULL);
 }
 
@@ -1512,7 +1514,7 @@ process_body_req_ab (ServiceRequest *service_request,
     }
 
      pn_contactlist_foreach_contact (session->contactlist,
-                                     contact_group, NULL);
+                                     contact_group, session);
 
     send_login_adl_command (service_request->service_session->session);
 }
