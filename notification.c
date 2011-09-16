@@ -362,6 +362,48 @@ add_contact_pending (struct MsnSession *session, char *email, int network_id,
 }
 
 static void
+uum_error_post (MsnCmdProc *cmdproc, MsnCommand *cmd,
+                char *payload, size_t len)
+{
+    pn_info ("UUM error, payload=[%s]", payload);
+}
+
+static void
+uum_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
+{
+    MsnCommand *cmd;
+    cmd = cmdproc->last_cmd;
+
+    if (error == 509)
+    {
+        /* TODO: improve this to show unsent message */
+        PurpleAccount *account;
+        PurpleConversation *conv;
+        char *error_str;
+
+        account = msn_session_get_user_data (cmdproc->session);
+        conv = purple_find_conversation_with_account (PURPLE_CONV_TYPE_IM,
+                                                      trans->data, account);
+        if (!conv)
+            conv = purple_conversation_new (PURPLE_CONV_TYPE_IM,
+                                            account, trans->data);
+        error_str = g_strdup (_("Messages to this contact cannot be sent "
+                                "due to a temporany error in MSN servers.")); 
+        purple_conversation_write (conv, NULL, error_str,
+                                   PURPLE_MESSAGE_ERROR, time (NULL));
+    }
+    else
+        pn_warning ("command=[%s],error=%i",
+                    msn_transaction_to_string (trans), error);
+
+    if (cmd->params[1])
+    {
+        cmd->payload_len = atoi(cmd->params[1]);
+        cmd->payload_cb = uum_error_post;
+    }
+}
+
+static void
 fqy_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
 {
     if (error == 508)
@@ -1665,6 +1707,7 @@ msn_notification_init(void)
     /* msn_table_add_error(cbs_table, "REA", rea_error); */
     msn_table_add_error(cbs_table, "USR", usr_error);
     msn_table_add_error(cbs_table, "FQY", fqy_error);
+    msn_table_add_error(cbs_table, "UUM", uum_error);
 
     msn_table_add_msg_type(cbs_table,
                            "text/plain",

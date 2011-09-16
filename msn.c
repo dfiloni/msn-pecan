@@ -1125,6 +1125,7 @@ send_uum_msg (MsnSession *session,
     trans = msn_transaction_new (cmdproc, "UUM", "%s 32 %d %zu",
                                  who, type, payload_len);
     msn_transaction_set_payload (trans, payload, payload_len);
+    msn_transaction_set_data (trans, g_strdup (who));
     msn_cmdproc_send_trans (cmdproc, trans);
 }
 
