@@ -288,7 +288,8 @@ send_add_contact_request (PnNode *conn,
     gchar *cachekey = service_request->service_session->cachekey;
     gchar *contact_info;
 
-    if (strcmp (service_request->extra_value, "yahoo") == 0)
+    if (service_request->extra_value &&
+        strcmp (service_request->extra_value, "yahoo") == 0)
         contact_info = g_strdup_printf ("<emails><ContactEmail>\r\n"
                                         "<contactEmailType>Messenger2</contactEmailType>\r\n"
                                         "<email>%s</email>\r\n"
@@ -467,7 +468,8 @@ rm_role_contact_request (PnNode *conn,
     else if (service_request->type == PN_RM_CONTACT_PENDING)
         member_role = "Pending";
 
-    if (strcmp (service_request->extra_value, "yahoo") == 0)
+    if (service_request->extra_value &&
+        strcmp (service_request->extra_value, "yahoo") == 0)
         member = g_strdup_printf ("<Member xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"EmailMember\">\r\n"
                                   "<Type>Email</Type>\r\n"
                                   "<State>Accepted</State>\r\n"
@@ -571,7 +573,8 @@ add_role_contact_request (PnNode *conn,
     else if (service_request->type == PN_ADD_CONTACT_PENDING)
         member_role = "Pending";
 
-    if (strcmp (service_request->extra_value, "yahoo") == 0)
+    if (service_request->extra_value &&
+        strcmp (service_request->extra_value, "yahoo") == 0)
         member = g_strdup_printf ("<Member xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"EmailMember\">\r\n"
                                   "<Type>Email</Type>\r\n"
                                   "<State>Accepted</State>\r\n"
