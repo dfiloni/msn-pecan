@@ -117,7 +117,7 @@ got_header(MsnNexus *nexus,
 
         login_params = g_strndup(base, c - base);
 
-        msn_got_login_params(session, login_params);
+        msn_got_login_params(session, login_params, NULL);
 
         g_free(login_params);
 

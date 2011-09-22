@@ -784,7 +784,7 @@ oim_process_requests (PecanOimSession *oim_session)
     switch (oim_request->type) {
         case PN_RECEIVE_OIM:
         case PN_DELETE_OIM:
-            id = 0;
+            id = 4;
             break;
         case PN_SEND_OIM:
             id = 1;

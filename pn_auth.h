@@ -32,4 +32,6 @@ void pn_auth_free (PnAuth *oim_session);
 
 void pn_auth_get_ticket (PnAuth *auth, int id, PnAuthCb cb, void *cb_data);
 
+gchar *pn_auth_rps_encrypt (PnAuth *auth, char *nonce);
+
 #endif /* PN_AUTH_H */

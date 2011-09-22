@@ -74,7 +74,7 @@ open_cb (PnNode *conn,
 
     pn_log ("begin");
 
-    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP14 CVR0");
+    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP15 CVR0");
 
     pn_log ("end");
 }
@@ -242,7 +242,7 @@ msn_notification_connect(MsnNotification *notification, const char *host, int po
  **************************************************************************/
 
 void
-msn_got_login_params(MsnSession *session, const char *login_params)
+msn_got_login_params(MsnSession *session, const char *login_params, const char *sso_value)
 {
     MsnCmdProc *cmdproc;
 
@@ -256,13 +256,13 @@ msn_got_login_params(MsnSession *session, const char *login_params)
         g_strfreev (tokens);
     }
 
-    msn_cmdproc_send(cmdproc, "USR", "TWN S %s", login_params);
+    msn_cmdproc_send(cmdproc, "USR", "SSO S %s %s", login_params, sso_value);
 }
 
 static void
 cvr_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
-    msn_cmdproc_send(cmdproc, "USR", "TWN I %s",
+    msn_cmdproc_send(cmdproc, "USR", "SSO I %s",
                      msn_session_get_username(cmdproc->session));
 }
 
@@ -287,12 +287,14 @@ alive_timeout (void *data)
 
 static void auth_cb (PnAuth *auth, void *data)
 {
-    char *tmp;
+    char *tmp, *value;
+    value = pn_auth_rps_encrypt (auth, (char *) data);
     tmp = g_strdup_printf("t=%s&p=%s",
-                          auth->security_token.messenger_msn_com_t,
-                          auth->security_token.messenger_msn_com_p);
-    msn_got_login_params (auth->session, tmp);
+                          auth->security_token.messengerclear_live_com_t,
+                          auth->security_token.messengerclear_live_com_p);
+    msn_got_login_params (auth->session, tmp, value);
     g_free(tmp);
+    g_free(value);
 }
 
 static void
@@ -313,10 +315,11 @@ usr_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
             msn_cmdproc_set_timeout(cmdproc, 30, timeout, ns);
         }
     }
-    else if (!g_ascii_strcasecmp(cmd->params[1], "TWN"))
+    else if (!g_ascii_strcasecmp(cmd->params[1], "SSO"))
     {
         session->auth = pn_auth_new(session);
-        pn_auth_get_ticket (session->auth, 0, auth_cb, NULL);
+        session->auth->login_policy = g_strdup (cmd->params[3]);
+        pn_auth_get_ticket (session->auth, 0, auth_cb, cmd->params[4]);
     }
 }
 
@@ -452,7 +455,7 @@ ver_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     session = cmdproc->session;
 
-    proto_str = "MSNP14";
+    proto_str = "MSNP15";
 
     for (i = 1; i < cmd->param_count; i++)
     {

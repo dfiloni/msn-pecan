@@ -26,6 +26,10 @@ struct PnAuth
     MsnSession *session;
     struct
     {
+        gchar *messengerclear_live_com_t;
+        gchar *messengerclear_live_com_p;
+        gchar *messengerclear_live_com_secret;
+
         gchar *messenger_msn_com_t;
         gchar *messenger_msn_com_p;
 
@@ -38,11 +42,14 @@ struct PnAuth
 
     struct
     {
+        time_t messengerclear_live_com;
         time_t messenger_msn_com;
         time_t messengersecure_live_com;
         time_t contacts_msn_com;
         time_t storage_msn_com;
     } expiration_time;
+
+    gchar *login_policy;
 
     PnAuthCb cb;
     void *cb_data;

@@ -63,6 +63,6 @@ void msn_notification_disconnect (MsnNotification *notification);
  */
 void msn_notification_close (MsnNotification *notification);
 
-void msn_got_login_params (struct MsnSession *session, const char *login_params);
+void msn_got_login_params (struct MsnSession *session, const char *login_params, const char *sso_value);
 
 #endif /* MSN_NOTIFICATION_H */

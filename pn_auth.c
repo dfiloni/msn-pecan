@@ -27,6 +27,9 @@
 
 #include "pn_log.h"
 
+#include <cipher.h>
+#include <util.h>
+
 #include <string.h>
 #include <stdlib.h> /* for atoi */
 #include <stdio.h>
@@ -93,6 +96,10 @@ pn_auth_free (PnAuth *auth)
 
     auth_request_free (auth->pending_req);
 
+    g_free (auth->security_token.messengerclear_live_com_t);
+    g_free (auth->security_token.messengerclear_live_com_p);
+    g_free (auth->security_token.messengerclear_live_com_secret);
+
     g_free (auth->security_token.messenger_msn_com_t);
     g_free (auth->security_token.messenger_msn_com_p);
 
@@ -101,6 +108,8 @@ pn_auth_free (PnAuth *auth)
     g_free (auth->security_token.contacts_msn_com);
 
     g_free (auth->security_token.storage_msn_com);
+
+    g_free (auth->login_policy);
 
     g_free (auth);
 }
@@ -148,17 +157,26 @@ process_body (AuthRequest *req,
 
         tokens = g_strsplit (login_params, "&amp;", 2);
 
-        g_free (req->auth->security_token.messenger_msn_com_t);
-        g_free (req->auth->security_token.messenger_msn_com_p);
+        g_free (req->auth->security_token.messengerclear_live_com_t);
+        g_free (req->auth->security_token.messengerclear_live_com_p);
 
-        req->auth->security_token.messenger_msn_com_t = g_strdup (tokens[0] + 2);
-        req->auth->security_token.messenger_msn_com_p = g_strdup (tokens[1] + 2);
+        req->auth->security_token.messengerclear_live_com_t = g_strdup (tokens[0] + 2);
+        req->auth->security_token.messengerclear_live_com_p = g_strdup (tokens[1] + 2);
 
         g_strfreev (tokens);
         g_free (login_params);
     }
 
-    cur = strstr (body, "<wsa:Address>messenger.msn.com</wsa:Address>");
+    cur = strstr (cur, "<wst:BinarySecret>");
+    if (cur)
+    {
+        gchar *end;
+        cur = strchr (cur, '>') + 1;
+        end = strchr (cur, '<');
+        req->auth->security_token.messengerclear_live_com_secret = g_strndup (cur, end - cur);
+    }
+
+    cur = strstr (body, "<wsa:Address>messengerclear.live.com</wsa:Address>");
     if (cur)
     {
         gchar *end, *expires;
@@ -172,7 +190,7 @@ process_body (AuthRequest *req,
                 expires = g_strndup (cur, end - cur);
 
                 t = parse_expiration_time (expires);
-                req->auth->expiration_time.messenger_msn_com = t;
+                req->auth->expiration_time.messengerclear_live_com = t;
 
                 g_free (expires);
             }
@@ -281,6 +299,50 @@ process_body (AuthRequest *req,
 
                 t = parse_expiration_time (expires);
                 req->auth->expiration_time.storage_msn_com = t;
+
+                g_free (expires);
+            }
+        }
+    }
+
+    cur = strstr (body, "<wsse:BinarySecurityToken Id=\"PPToken5\">");
+    if (!cur)
+        cur = strstr (body, "<wsse:BinarySecurityToken Id=\"Compact5\">");
+    if (cur)
+    {
+        gchar *params, *end, **tokens;
+
+        cur = strchr (cur, '>') + 1;
+        end = strchr (cur, '<');
+        params = g_strndup (cur, end - cur);
+
+        tokens = g_strsplit (params, "&amp;", 2);
+
+        g_free (req->auth->security_token.messenger_msn_com_t);
+        g_free (req->auth->security_token.messenger_msn_com_p);
+
+        req->auth->security_token.messenger_msn_com_t = g_strdup (tokens[0] + 2);
+        req->auth->security_token.messenger_msn_com_p = g_strdup (tokens[1] + 2);
+
+        g_strfreev (tokens);
+        g_free (params);
+    }
+
+    cur = strstr (body, "<wsa:Address>messenger.msn.com</wsa:Address>");
+    if (cur)
+    {
+        gchar *end, *expires;
+        time_t t;
+
+        cur = strstr (cur, "<wsu:Expires>");
+        if (cur) {
+            cur += 13;
+            end = strchr (cur, '<');
+            if (end) {
+                expires = g_strndup (cur, end - cur);
+
+                t = parse_expiration_time (expires);
+                req->auth->expiration_time.messenger_msn_com = t;
 
                 g_free (expires);
             }
@@ -402,10 +464,10 @@ open_cb (PnNode *conn,
                             "<wst:RequestType>http://schemas.xmlsoap.org/ws/2004/04/security/trust/Issue</wst:RequestType>"
                             "<wsp:AppliesTo>"
                             "<wsa:EndpointReference>"
-                            "<wsa:Address>messenger.msn.com</wsa:Address>"
+                            "<wsa:Address>messengerclear.live.com</wsa:Address>"
                             "</wsa:EndpointReference>"
                             "</wsp:AppliesTo>"
-                            "<wsse:PolicyReference URI=\"?id=507\"></wsse:PolicyReference>"
+                            "<wsse:PolicyReference URI=\"%s\"></wsse:PolicyReference>"
                             "</wst:RequestSecurityToken>"
                             "<wst:RequestSecurityToken Id=\"RST2\">"
                             "<wst:RequestType>http://schemas.xmlsoap.org/ws/2004/04/security/trust/Issue</wst:RequestType>"
@@ -434,11 +496,21 @@ open_cb (PnNode *conn,
                             "</wsp:AppliesTo>"
                             "<wsse:PolicyReference URI=\"MBI\"></wsse:PolicyReference>"
                             "</wst:RequestSecurityToken>"
+                            "<wst:RequestSecurityToken Id=\"RST5\">"
+                            "<wst:RequestType>http://schemas.xmlsoap.org/ws/2004/04/security/trust/Issue</wst:RequestType>"
+                            "<wsp:AppliesTo>"
+                            "<wsa:EndpointReference>"
+                            "<wsa:Address>messenger.msn.com</wsa:Address>"
+                            "</wsa:EndpointReference>"
+                            "</wsp:AppliesTo>"
+                            "<wsse:PolicyReference URI=\"?id=507\"></wsse:PolicyReference>"
+                            "</wst:RequestSecurityToken>"
                             "</ps:RequestMultipleSecurityTokens>"
                             "</Body>"
                             "</Envelope>",
                             session->username,
-                            session->password);
+                            session->password,
+                            req->auth->login_policy);
 
     body_len = strlen (body);
 
@@ -477,10 +549,11 @@ pn_auth_get_ticket (PnAuth *auth, int id, PnAuthCb cb, void *cb_data)
     time_t ticket_time, current_time = time (NULL);
 
     switch (id) {
-    case 0: ticket_time = auth->expiration_time.messenger_msn_com; break;
+    case 0: ticket_time = auth->expiration_time.messengerclear_live_com; break;
     case 1: ticket_time = auth->expiration_time.messengersecure_live_com; break;
     case 2: ticket_time = auth->expiration_time.contacts_msn_com; break;
     case 3: ticket_time = auth->expiration_time.storage_msn_com; break;
+    case 4: ticket_time = auth->expiration_time.messenger_msn_com; break;
     default: return;
     }
 
@@ -509,4 +582,155 @@ pn_auth_get_ticket (PnAuth *auth, int id, PnAuthCb cb, void *cb_data)
     } else {
         cb (auth, cb_data);
     }
+}
+
+/**************************************************************************
+ * RPS/SSO Authentication (taken from libpurple 2.10.0)
+***************************************************************************/
+
+static void
+pn_auth_write32le(char *buf, guint32 data)
+{
+	*(guint32 *)buf = GUINT32_TO_LE(data);
+}
+
+#define pn_auth_push32le(buf, data) pn_auth_write32le(buf, data), buf+=4
+
+static char *
+rps_create_key(const char *key, int key_len, const char *data, size_t data_len)
+{
+	const guchar magic[] = "WS-SecureConversation";
+	const int magic_len = sizeof(magic) - 1;
+
+	PurpleCipherContext *hmac;
+	guchar hash1[20], hash2[20], hash3[20], hash4[20];
+	char *result;
+
+	hmac = purple_cipher_context_new_by_name("hmac", NULL);
+
+	purple_cipher_context_set_option(hmac, "hash", "sha1");
+	purple_cipher_context_set_key_with_len(hmac, (guchar *)key, key_len);
+	purple_cipher_context_append(hmac, magic, magic_len);
+	purple_cipher_context_append(hmac, (guchar *)data, data_len);
+	purple_cipher_context_digest(hmac, sizeof(hash1), hash1, NULL);
+
+	purple_cipher_context_reset(hmac, NULL);
+	purple_cipher_context_set_option(hmac, "hash", "sha1");
+	purple_cipher_context_set_key_with_len(hmac, (guchar *)key, key_len);
+	purple_cipher_context_append(hmac, hash1, 20);
+	purple_cipher_context_append(hmac, magic, magic_len);
+	purple_cipher_context_append(hmac, (guchar *)data, data_len);
+	purple_cipher_context_digest(hmac, sizeof(hash2), hash2, NULL);
+
+	purple_cipher_context_reset(hmac, NULL);
+	purple_cipher_context_set_option(hmac, "hash", "sha1");
+	purple_cipher_context_set_key_with_len(hmac, (guchar *)key, key_len);
+	purple_cipher_context_append(hmac, hash1, 20);
+	purple_cipher_context_digest(hmac, sizeof(hash3), hash3, NULL);
+
+	purple_cipher_context_reset(hmac, NULL);
+	purple_cipher_context_set_option(hmac, "hash", "sha1");
+	purple_cipher_context_set_key_with_len(hmac, (guchar *)key, key_len);
+	purple_cipher_context_append(hmac, hash3, sizeof(hash3));
+	purple_cipher_context_append(hmac, magic, magic_len);
+	purple_cipher_context_append(hmac, (guchar *)data, data_len);
+	purple_cipher_context_digest(hmac, sizeof(hash4), hash4, NULL);
+
+	purple_cipher_context_destroy(hmac);
+
+	result = g_malloc(24);
+	memcpy(result, hash2, sizeof(hash2));
+	memcpy(result + sizeof(hash2), hash4, 4);
+
+	return result;
+}
+
+static char *
+des3_cbc(const char *key, const char *iv, const char *data, int len, gboolean decrypt)
+{
+	PurpleCipherContext *des3;
+	char *out;
+	size_t outlen;
+
+	des3 = purple_cipher_context_new_by_name("des3", NULL);
+	purple_cipher_context_set_key(des3, (guchar *)key);
+	purple_cipher_context_set_batch_mode(des3, PURPLE_CIPHER_BATCH_MODE_CBC);
+	purple_cipher_context_set_iv(des3, (guchar *)iv, 8);
+
+	out = g_malloc(len);
+	if (decrypt)
+		purple_cipher_context_decrypt(des3, (guchar *)data, len, (guchar *)out, &outlen);
+	else
+		purple_cipher_context_encrypt(des3, (guchar *)data, len, (guchar *)out, &outlen);
+
+	purple_cipher_context_destroy(des3);
+
+	return out;
+}
+
+#define MSN_USER_KEY_SIZE (7*4 + 8 + 20 + 72)
+#define CRYPT_MODE_CBC 1
+#define CIPHER_TRIPLE_DES 0x6603
+#define HASH_SHA1 0x8004
+gchar *
+pn_auth_rps_encrypt (PnAuth *auth, char *nonce)
+{
+	char usr_key_base[MSN_USER_KEY_SIZE], *usr_key;
+	const char magic1[] = "SESSION KEY HASH";
+	const char magic2[] = "SESSION KEY ENCRYPTION";
+	PurpleCipherContext *hmac;
+	size_t len;
+	guchar *hash;
+	char *key1, *key2, *key3;
+	gsize key1_len;
+	const char *iv;
+	char *nonce_fixed;
+	char *cipher;
+	char *response;
+
+	usr_key = &usr_key_base[0];
+	/* Header */
+	pn_auth_push32le(usr_key, 28);                  /* Header size */
+	pn_auth_push32le(usr_key, CRYPT_MODE_CBC);      /* Crypt mode */
+	pn_auth_push32le(usr_key, CIPHER_TRIPLE_DES);   /* Cipher type */
+	pn_auth_push32le(usr_key, HASH_SHA1);           /* Hash type */
+	pn_auth_push32le(usr_key, 8);                   /* IV size */
+	pn_auth_push32le(usr_key, 20);                  /* Hash size */
+	pn_auth_push32le(usr_key, 72);                  /* Cipher size */
+	/* Data */
+	iv = usr_key;
+	pn_auth_push32le(usr_key, rand());
+	pn_auth_push32le(usr_key, rand());
+	hash = (guchar *)usr_key;
+	usr_key += 20;  /* Remaining is cipher data */
+
+	key1 = (char *) purple_base64_decode (auth->security_token.messengerclear_live_com_secret, &key1_len);
+	key2 = rps_create_key(key1, key1_len, magic1, sizeof(magic1) - 1);
+	key3 = rps_create_key(key1, key1_len, magic2, sizeof(magic2) - 1);
+
+	len = strlen(nonce);
+	hmac = purple_cipher_context_new_by_name("hmac", NULL);
+	purple_cipher_context_set_option(hmac, "hash", "sha1");
+	purple_cipher_context_set_key_with_len(hmac, (guchar *)key2, 24);
+	purple_cipher_context_append(hmac, (guchar *)nonce, len);
+	purple_cipher_context_digest(hmac, 20, hash, NULL);
+	purple_cipher_context_destroy(hmac);
+
+	/* We need to pad this to 72 bytes, apparently */
+	nonce_fixed = g_malloc(len + 8);
+	memcpy(nonce_fixed, nonce, len);
+	memset(nonce_fixed + len, 0x08, 8);
+	cipher = des3_cbc(key3, iv, nonce_fixed, len + 8, FALSE);
+	g_free(nonce_fixed);
+
+	memcpy(usr_key, cipher, 72);
+
+	g_free(key1);
+	g_free(key2);
+	g_free(key3);
+	g_free(cipher);
+
+	response = purple_base64_encode((guchar *)usr_key_base, MSN_USER_KEY_SIZE);
+
+	return response;
 }
