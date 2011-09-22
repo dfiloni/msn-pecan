@@ -404,8 +404,18 @@ uum_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
 }
 
 static void
+fqy_error_post (MsnCmdProc *cmdproc, MsnCommand *cmd,
+                char *payload, size_t len)
+{
+    pn_info ("FQY error, payload=[%s]", payload);
+}
+
+static void
 fqy_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
 {
+    MsnCommand *cmd;
+    cmd = cmdproc->last_cmd;
+
     if (error == 508)
     {
         FQYTransData *data;
@@ -424,6 +434,12 @@ fqy_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
     else
         pn_warning ("command=[%s],error=%i",
                     msn_transaction_to_string (trans), error);
+
+    if (cmd->params[1])
+    {
+        cmd->payload_len = atoi(cmd->params[1]);
+        cmd->payload_cb = fqy_error_post;
+    }
 }
 
 static void
