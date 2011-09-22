@@ -1643,7 +1643,14 @@ read_cb (PnNode *conn,
         if (status != G_IO_STATUS_NORMAL)
             goto leave;
 
-        pn_debug ("%s", body);
+        if (strstr (body, "<soap:Fault>"))
+        {
+            pn_error ("SOAP: error sent from the server, soap=[%s]", body);
+            g_free (body);
+            goto leave;
+        }
+        else
+            pn_debug ("%s", body);
 
         {
             gchar *cur;
