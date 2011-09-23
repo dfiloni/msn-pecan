@@ -88,14 +88,16 @@ open_cb (PnNode *conn,
         {
             swboard->empty = FALSE;
 
-            trans = msn_transaction_new (cmdproc, "ANS", "%s %s %s",
+            trans = msn_transaction_new (cmdproc, "ANS", "%s;{%s} %s %s",
                                          msn_session_get_username (session),
+                                         session->machineguid,
                                          swboard->auth_key, swboard->session_id);
         }
         else
         {
-            trans = msn_transaction_new (cmdproc, "USR", "%s %s",
+            trans = msn_transaction_new (cmdproc, "USR", "%s;{%s} %s",
                                          msn_session_get_username (session),
+                                         session->machineguid,
                                          swboard->auth_key);
         }
 
@@ -381,11 +383,29 @@ send_clientcaps(MsnSwitchBoard *swboard)
 }
 
 static void
-msn_switchboard_add_user(MsnSwitchBoard *swboard, const char *user)
+msn_switchboard_add_user(MsnSwitchBoard *swboard, const char *passport)
 {
     PurpleAccount *account;
+    gchar *user;
 
     g_return_if_fail(swboard);
+
+    if (strchr (passport, ';'))
+    {
+        gchar **user_str;
+        user_str = g_strsplit (passport, ";", 2);
+        user = g_strdup (user_str[0]);
+        g_strfreev (user_str);
+    }
+    else
+        user = g_strdup (passport);
+        
+
+    if (g_list_find_custom(swboard->users, user, (GCompareFunc) strcmp))
+        goto leave;
+
+    if (strcmp (user, swboard->session->username) == 0)
+        goto leave;
 
     account = msn_session_get_user_data (swboard->session);
 
@@ -404,7 +424,7 @@ msn_switchboard_add_user(MsnSwitchBoard *swboard, const char *user)
         purple_conv_chat_add_user(PURPLE_CONV_CHAT(swboard->conv), user, NULL,
                                   PURPLE_CBFLAGS_NONE, TRUE);
     }
-    else if (swboard->current_users > 1 || swboard->total_users > 1)
+    else if (swboard->current_users > 1)
     {
         if (swboard->conv == NULL ||
             purple_conversation_get_type(swboard->conv) != PURPLE_CONV_TYPE_CHAT)
@@ -472,6 +492,9 @@ msn_switchboard_add_user(MsnSwitchBoard *swboard, const char *user)
     {
         pn_warning ("this should not happen");
     }
+
+leave:
+   g_free (user);
 }
 
 static PurpleConversation *
@@ -727,14 +750,23 @@ static void
 bye_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
     MsnSwitchBoard *swboard;
-    const char *user;
+    char *user;
 
     swboard = cmdproc->data;
-    user = cmd->params[0];
 
     /* cmdproc->data is set to NULL when the switchboard is destroyed;
      * we may get a bye shortly thereafter. */
     g_return_if_fail(swboard);
+
+    if (strchr (cmd->params[0], ';'))
+    {
+        gchar **user_str;
+        user_str = g_strsplit (cmd->params[0], ";", 2);
+        user = g_strdup (user_str[0]);
+        g_strfreev (user_str);
+    }
+    else
+        user = g_strdup (cmd->params[0]);
 
     if (swboard->conv == NULL)
     {
@@ -755,6 +787,8 @@ bye_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
         /* This is a switchboard used for a im session */
         msn_switchboard_close(swboard);
     }
+
+    g_free (user);
 }
 
 static void

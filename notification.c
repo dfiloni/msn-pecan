@@ -74,7 +74,7 @@ open_cb (PnNode *conn,
 
     pn_log ("begin");
 
-    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP15 CVR0");
+    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP16 CVR0");
 
     pn_log ("end");
 }
@@ -256,7 +256,7 @@ msn_got_login_params(MsnSession *session, const char *login_params, const char *
         g_strfreev (tokens);
     }
 
-    msn_cmdproc_send(cmdproc, "USR", "SSO S %s %s", login_params, sso_value);
+    msn_cmdproc_send(cmdproc, "USR", "SSO S %s %s {%s}", login_params, sso_value, session->machineguid);
 }
 
 static void
@@ -455,7 +455,7 @@ ver_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     session = cmdproc->session;
 
-    proto_str = "MSNP15";
+    proto_str = "MSNP16";
 
     for (i = 1; i < cmd->param_count; i++)
     {
@@ -626,6 +626,9 @@ iln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     passport = cmd->params[2];
     friendly = pn_url_decode(cmd->params[4]);
 
+    if (strcmp (passport, session->username) == 0)
+        return;
+
     user = pn_contactlist_find_contact(session->contactlist, passport);
 
     pn_contact_set_state(user, state);
@@ -633,9 +636,12 @@ iln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     if (cmd->param_count >= 6)
     {
+        gchar **client_id_str;
         gulong client_id;
-        client_id = atol (cmd->params[5]);
+        client_id_str = g_strsplit (cmd->params[5], ":", 2);
+        client_id = strtoul (client_id_str[0], NULL, 10);
         pn_contact_set_client_id (user, client_id);
+        g_strfreev (client_id_str);
     }
 
 #if defined(PECAN_CVR)
@@ -678,7 +684,7 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     struct pn_contact *user;
     unsigned long clientid;
     const char *state, *passport;
-    gchar *friendly;
+    gchar *friendly, **client_id_str;
 
     session = cmdproc->session;
 
@@ -696,7 +702,9 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     pn_contact_set_friendly_name(user, friendly);
 
-    clientid = strtoul (cmd->params[4], NULL, 10);
+    client_id_str = g_strsplit (cmd->params[5], ":", 2);
+    clientid = strtoul (client_id_str[0], NULL, 10);
+    g_strfreev (client_id_str);
     if (!pn_contact_get_client_id (user))
         pn_contact_set_client_id (user, clientid);
     user->mobile = (clientid & PN_CLIENT_CAP_MSNMOBILE);
@@ -1143,11 +1151,27 @@ rng_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
     MsnSession *session;
     MsnSwitchBoard *swboard;
-    char *host;
+    char *host, *passport;
     int port;
     const char *id;
 
     session = cmdproc->session;
+
+    if (strchr (cmd->params[4], ';'))
+    {
+        gchar **user_str;
+        user_str = g_strsplit (cmd->params[4], ";", 2);
+        passport = g_strdup (user_str[0]);
+        g_strfreev (user_str);
+    }
+    else
+        passport = g_strdup (cmd->params[4]);
+
+    if (strcmp (passport, session->username) == 0)
+    {
+        g_free (passport);
+        return;
+    }
 
     msn_parse_socket(cmd->params[1], &host, &port);
 
@@ -1156,7 +1180,7 @@ rng_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     msn_switchboard_set_session_id(swboard, cmd->params[0]);
     msn_switchboard_set_auth_key(swboard, cmd->params[3]);
 
-    if (g_hash_table_lookup (session->conversations, cmd->params[4])) {
+    if (g_hash_table_lookup (session->conversations, passport)) {
         swboard->chat_id = session->conv_seq++;
 
         g_hash_table_insert (session->chats, GINT_TO_POINTER (swboard->chat_id), swboard);
@@ -1166,9 +1190,11 @@ rng_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
         swboard->timer = NULL;
 
         id = "chat";
+
+        g_free (passport);
     }
     else {
-        id = swboard->im_user = g_strdup(cmd->params[4]);
+        id = swboard->im_user = passport;
 
         g_hash_table_insert (session->conversations, g_strdup (id), swboard);
     }

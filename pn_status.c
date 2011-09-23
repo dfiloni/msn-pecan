@@ -53,8 +53,9 @@ pn_set_personal_message (MsnSession *session,
     gchar *payload;
 
     cmdproc = session->notification->cmdproc;
-    payload = g_strdup_printf ("<Data><PSM>%s</PSM><CurrentMedia>%s</CurrentMedia></Data><MachineGuid>{CFE80F9D-180F-4399-82AB-413F33A1FA11}</MachineGuid>",
-                               value ? value : "", current_media ? current_media : "");
+    payload = g_strdup_printf ("<Data><PSM>%s</PSM><CurrentMedia>%s</CurrentMedia><MachineGuid>%s</MachineGuid><DDP></DDP></Data>",
+                               value ? value : "", current_media ? current_media : "",
+                               session->machineguid);
 
     {
         MsnTransaction *trans;
@@ -144,14 +145,42 @@ create_current_media_string (PurplePresence *presence)
         return NULL;
 }
 
+static void
+pn_send_login_uux (MsnSession *session)
+{
+    MsnCmdProc *cmdproc;
+    gchar *payload;
+    const gchar *state_text;
+    cmdproc = session->notification->cmdproc;
+
+    payload = g_strdup_printf ("<EndpointData><Capabilities>%ld:0</Capabilities></EndpointData>",
+                               session->client_id);
+    {
+        MsnTransaction *trans;
+        trans = msn_transaction_new (cmdproc, "UUX", "%d", strlen (payload));
+        msn_transaction_set_payload (trans, payload, strlen (payload));
+        msn_cmdproc_send_trans (cmdproc, trans);
+    }
+    g_free (payload);
+
+    state_text = util_type_to_str (util_status_from_session (session));
+    payload = g_strdup_printf ("<PrivateEndpointData><EpName>msn-pecan</EpName><Idle>%s</Idle><ClientType>1</ClientType><State>%s</State></PrivateEndpointData>",
+                               strcmp (state_text, "ILN") == 0 ? "true" : "false", state_text);
+    {
+        MsnTransaction *trans;
+        trans = msn_transaction_new (cmdproc, "UUX", "%d", strlen (payload));
+        msn_transaction_set_payload (trans, payload, strlen (payload));
+        msn_cmdproc_send_trans (cmdproc, trans);
+    }
+    g_free (payload);
+}
+
 void
 pn_update_status (MsnSession *session)
 {
     MsnCmdProc *cmdproc;
     struct pn_contact *user;
     const gchar *state_text;
-    gulong client_id;
-    PnClientCaps caps;
 
     g_return_if_fail (session);
 
@@ -161,19 +190,6 @@ pn_update_status (MsnSession *session)
     user = msn_session_get_contact (session);
     cmdproc = session->notification->cmdproc;
     state_text = util_type_to_str (util_status_from_session (session));
-
-    caps = PN_CLIENT_CAP_BASE;
-#if defined(PECAN_CVR)
-    caps |= PN_CLIENT_CAP_INK_GIF;
-#if defined(PECAN_LIBSIREN)
-    caps |= PN_CLIENT_CAP_VOICE_CLIP;
-#endif
-#if defined(PECAN_LIBMSPACK)
-    caps |= PN_CLIENT_CAP_WINKS;
-#endif
-#endif
-
-    client_id = caps | PN_CLIENT_VER_8_0;
 
 #if defined(PECAN_CVR)
     {
@@ -187,21 +203,23 @@ pn_update_status (MsnSession *session)
 
             msnobj_str = pn_msnobj_to_string (obj);
 
-            msn_cmdproc_send (cmdproc, "CHG", "%s %d %s", state_text,
-                              client_id, purple_url_encode (msnobj_str));
+            msn_cmdproc_send (cmdproc, "CHG", "%s %ld %s", state_text,
+                              session->client_id, purple_url_encode (msnobj_str));
 
             g_free (msnobj_str);
         }
         else
         {
-            msn_cmdproc_send (cmdproc, "CHG", "%s %d", state_text,
-                              client_id);
+            msn_cmdproc_send (cmdproc, "CHG", "%s %ld", state_text,
+                              session->client_id);
         }
     }
 #else
-    msn_cmdproc_send (cmdproc, "CHG", "%s %d", state_text,
-                      client_id);
+    msn_cmdproc_send (cmdproc, "CHG", "%s %ld", state_text,
+                      session->client_id);
 #endif /* defined(PECAN_CVR) */
+
+    pn_send_login_uux (session);
 }
 
 void

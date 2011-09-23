@@ -63,6 +63,9 @@ struct MsnSession
     PnDpManager *dp_manager;
 
     gchar *cid; /* Needed to get profile from server */
+    gchar *machineguid;
+
+    gulong client_id;
 
     PnPermission default_permission;
 

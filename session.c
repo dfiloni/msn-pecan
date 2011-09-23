@@ -17,6 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+#include "pn_global.h"
 #include "session_private.h"
 #include "pn_log.h"
 #include "pn_util.h"
@@ -60,6 +61,7 @@ msn_session_new (const gchar *username,
                  gboolean http_method)
 {
     MsnSession *session;
+    PnClientCaps caps;
 
     session = g_new0 (MsnSession, 1);
 
@@ -99,6 +101,8 @@ msn_session_new (const gchar *username,
 
     session->conv_seq = 1;
 
+    session->machineguid = pn_rand_guid ();
+
     session->oim_session = pn_oim_session_new (session);
     session->service_session = pn_service_session_new (session);
     session->roaming_session = pn_roaming_session_new (session);
@@ -109,6 +113,19 @@ msn_session_new (const gchar *username,
 #if defined(PECAN_CVR)
     session->links = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify) pn_peer_link_unref);
 #endif /* defined(PECAN_CVR) */
+
+    caps = PN_CLIENT_CAP_BASE;
+#if defined(PECAN_CVR)
+    caps |= PN_CLIENT_CAP_INK_GIF;
+#if defined(PECAN_LIBSIREN)
+    caps |= PN_CLIENT_CAP_VOICE_CLIP;
+#endif
+#if defined(PECAN_LIBMSPACK)
+    caps |= PN_CLIENT_CAP_WINKS;
+#endif
+#endif
+
+    session->client_id = caps | PN_CLIENT_VER_9_0;
 
     return session;
 }
@@ -124,6 +141,7 @@ msn_session_destroy (MsnSession *session)
     pn_roaming_session_free (session->roaming_session);
 
     g_free (session->cid);
+    g_free (session->machineguid);
 
     if (session->connected)
         msn_session_disconnect (session);
