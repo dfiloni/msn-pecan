@@ -125,7 +125,7 @@ msn_session_new (const gchar *username,
 #endif
 #endif
 
-    session->client_id = caps | PN_CLIENT_VER_9_0;
+    session->client_id = caps | PN_CLIENT_VER_2009;
 
     return session;
 }

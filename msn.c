@@ -1110,7 +1110,8 @@ grab_emoticons(MsnSession *session,
 static void
 send_uum_msg (MsnSession *session,
               const gchar *who,
-              MsnMessage *msg)
+              MsnMessage *msg,
+              int network_id)
 {
     MsnCmdProc *cmdproc;
     MsnTransaction *trans;
@@ -1122,8 +1123,8 @@ send_uum_msg (MsnSession *session,
     payload = msn_message_gen_payload (msg, &payload_len);
     type = msg->type;
 
-    trans = msn_transaction_new (cmdproc, "UUM", "%s 32 %d %zu",
-                                 who, type, payload_len);
+    trans = msn_transaction_new (cmdproc, "UUM", "%s %d %d %zu",
+                                 who, network_id, type, payload_len);
     msn_transaction_set_payload (trans, payload, payload_len);
     msn_transaction_set_data (trans, g_strdup (who));
     msn_cmdproc_send_trans (cmdproc, trans);
@@ -1182,8 +1183,14 @@ send_im (PurpleConnection *gc,
         swboard = msn_session_find_swboard (session, who);
         user = msn_session_get_contact (session);
 
+        if (contact && contact->status == PN_STATUS_OFFLINE && !swboard)
+            offline = TRUE;
+
+        if (user->status == PN_STATUS_HIDDEN)
+            offline = TRUE;
+
         /* Yahoo! user */
-        if (contact && (pn_contact_get_network_id (contact) == 32))
+        if (contact && ((pn_contact_get_network_id (contact) == 32) || offline))
         {
             MsnMessage *msg;
 
@@ -1193,24 +1200,8 @@ send_im (PurpleConnection *gc,
             g_free (msgformat);
             g_free (msgtext);
 
-            send_uum_msg (session, who, msg);
+            send_uum_msg (session, who, msg, pn_contact_get_network_id (contact));
 
-            return 1;
-        }
-
-        if (contact && contact->status == PN_STATUS_OFFLINE && !swboard)
-            offline = TRUE;
-
-        if (user->status == PN_STATUS_HIDDEN)
-            offline = TRUE;
-
-        if (offline)
-        {
-            pn_oim_session_request (session->oim_session,
-                                    who,
-                                    NULL,
-                                    msgtext,
-                                    PN_SEND_OIM);
             return 1;
         }
     }

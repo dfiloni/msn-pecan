@@ -74,7 +74,7 @@ open_cb (PnNode *conn,
 
     pn_log ("begin");
 
-    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP16 CVR0");
+    pn_cmd_server_send (PN_CMD_SERVER (conn), "VER", "MSNP18 CVR0");
 
     pn_log ("end");
 }
@@ -455,7 +455,7 @@ ver_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     session = cmdproc->session;
 
-    proto_str = "MSNP16";
+    proto_str = "MSNP18";
 
     for (i = 1; i < cmd->param_count; i++)
     {
@@ -556,7 +556,7 @@ ubm_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     if (cmd->payload == NULL)
     {
         cmdproc->last_cmd->payload_cb  = msg_cmd_post;
-        cmd->payload_len = atoi(cmd->params[3]);
+        cmd->payload_len = atoi(cmd->params[5]);
     }
     else
     {
@@ -602,8 +602,13 @@ static void
 fln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
     struct pn_contact *user;
+    gchar *passport, **user_str;
 
-    user = pn_contactlist_find_contact(cmdproc->session->contactlist, cmd->params[0]);
+    user_str = g_strsplit (cmd->params[0], ":", 2);
+    passport = g_strdup (user_str[1]);
+    g_strfreev (user_str);
+    user = pn_contactlist_find_contact (cmdproc->session->contactlist, passport);
+    g_free (passport);
     pn_contact_set_state(user, NULL);
     pn_contact_update(user);
 
@@ -612,6 +617,7 @@ fln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 #endif /* defined(PECAN_CVR) */
 }
 
+#if 0
 static void
 iln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 {
@@ -663,6 +669,7 @@ iln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 
     g_free (friendly);
 }
+#endif
 
 static void
 ipg_cmd_post(MsnCmdProc *cmdproc, MsnCommand *cmd, char *payload, size_t len)
@@ -683,14 +690,16 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     MsnSession *session;
     struct pn_contact *user;
     unsigned long clientid;
-    const char *state, *passport;
-    gchar *friendly, **client_id_str;
+    const char *state;
+    gchar *friendly, **client_id_str, *passport, **user_str;
 
     session = cmdproc->session;
 
     state    = cmd->params[0];
-    passport = cmd->params[1];
-    friendly = pn_url_decode(cmd->params[3]);
+    user_str = g_strsplit (cmd->params[1], ":", 2);
+    passport = g_strdup (user_str[1]);
+    g_strfreev (user_str);
+    friendly = pn_url_decode(cmd->params[2]);
 
     user = pn_contactlist_find_contact(session->contactlist, passport);
 
@@ -700,9 +709,11 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
         return;
     }
 
+    g_free (passport);
+
     pn_contact_set_friendly_name(user, friendly);
 
-    client_id_str = g_strsplit (cmd->params[5], ":", 2);
+    client_id_str = g_strsplit (cmd->params[3], ":", 2);
     clientid = strtoul (client_id_str[0], NULL, 10);
     g_strfreev (client_id_str);
     if (!pn_contact_get_client_id (user))
@@ -714,11 +725,11 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
 #if defined(PECAN_CVR)
     if (msn_session_get_bool (session, "use_userdisplay"))
     {
-        if (cmd->param_count == 6)
+        if (cmd->param_count == 5)
         {
             struct pn_msnobj *obj;
             gchar *tmp;
-            tmp = pn_url_decode(cmd->params[5]);
+            tmp = pn_url_decode(cmd->params[4]);
             obj = pn_msnobj_new_from_string(tmp);
             pn_contact_set_object(user, obj);
             g_free (tmp);
@@ -979,12 +990,15 @@ ubx_cmd_post (MsnCmdProc *cmdproc,
 {
     MsnSession *session;
     struct pn_contact *contact;
-    const gchar *passport;
+    gchar *passport, **user_str;
 
     session = cmdproc->session;
 
-    passport = cmd->params[0];
+    user_str = g_strsplit (cmd->params[0], ":", 2);
+    passport = g_strdup (user_str[1]);
+    g_strfreev (user_str);
     contact = pn_contactlist_find_contact (session->contactlist, passport);
+    g_free (passport);
 
     if (contact)
     {
@@ -1030,7 +1044,7 @@ ubx_cmd (MsnCmdProc *cmdproc,
          MsnCommand *cmd)
 {
     cmdproc->last_cmd->payload_cb = ubx_cmd_post;
-    cmd->payload_len = atoi (cmd->params[2]);
+    cmd->payload_len = atoi (cmd->params[1]);
 }
 
 static void
@@ -1426,7 +1440,6 @@ initial_mdata_msg (MsnCmdProc *cmdproc,
                                 pn_oim_session_request (session->oim_session,
                                                         passport,
                                                         message_id,
-                                                        NULL,
                                                         PN_RECEIVE_OIM);
 
                             g_free (passport);
@@ -1503,7 +1516,7 @@ oim_msg (MsnCmdProc *cmdproc,
 
                     if (contact && !(pn_contact_is_blocked (contact)))
                         pn_oim_session_request (session->oim_session, passport, message_id,
-                                                NULL, PN_RECEIVE_OIM);
+                                                PN_RECEIVE_OIM);
 
                     g_free (passport);
                     g_free (message_id);
@@ -1706,8 +1719,8 @@ msn_notification_init(void)
 
     /* Synchronous */
     msn_table_add_cmd(cbs_table, "CHG", "CHG", chg_cmd);
-    msn_table_add_cmd(cbs_table, "CHG", "ILN", iln_cmd);
-    msn_table_add_cmd(cbs_table, "ADC", "ILN", iln_cmd);
+    /* msn_table_add_cmd(cbs_table, "CHG", "ILN", iln_cmd); */ /* Not supported in MSNP18 */
+    /* msn_table_add_cmd(cbs_table, "ADC", "ILN", iln_cmd); */
     msn_table_add_cmd(cbs_table, "USR", "USR", usr_cmd);
     msn_table_add_cmd(cbs_table, "USR", "XFR", xfr_cmd);
     msn_table_add_cmd(cbs_table, "CVR", "CVR", cvr_cmd);
@@ -1734,7 +1747,7 @@ msn_notification_init(void)
     msn_table_add_cmd(cbs_table, NULL, "QNG", qng_cmd);
     msn_table_add_cmd(cbs_table, NULL, "FLN", fln_cmd);
     msn_table_add_cmd(cbs_table, NULL, "NLN", nln_cmd);
-    msn_table_add_cmd(cbs_table, NULL, "ILN", iln_cmd);
+    /* msn_table_add_cmd(cbs_table, NULL, "ILN", iln_cmd); */
     msn_table_add_cmd(cbs_table, NULL, "OUT", out_cmd);
     msn_table_add_cmd(cbs_table, NULL, "RNG", rng_cmd);
     msn_table_add_cmd(cbs_table, NULL, "GCF", gcf_cmd);

@@ -22,10 +22,7 @@
 typedef enum
 {
     PN_RECEIVE_OIM,
-    PN_DELETE_OIM,
-    PN_SEND_OIM,
-    PN_SSO_AUTH_OIM
-
+    PN_DELETE_OIM
 } OimRequestType;
 
 typedef struct PecanOimSession PecanOimSession;
@@ -39,7 +36,6 @@ void pn_oim_session_free (PecanOimSession *oim_session);
 void pn_oim_session_request (PecanOimSession *oim_session,
                              const gchar *passport,
                              const gchar *message_id,
-                             const gchar *oim_message,
                              OimRequestType type);
 
 #endif /* PN_OIM_H */
