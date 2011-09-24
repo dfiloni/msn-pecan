@@ -1643,9 +1643,13 @@ read_cb (PnNode *conn,
         if (status != G_IO_STATUS_NORMAL)
             goto leave;
 
-        if (strstr (body, "<soap:Fault>"))
+        if (strstr (body, "<faultstring>") &&
+            !strstr (body, "MemberAlreadyExists")) /* ignore this error */
         {
-            pn_error ("SOAP: error sent from the server, soap=[%s]", body);
+            gchar *error;
+
+            pn_parse_xml_tag (body, "faultstring", &error);
+            pn_error ("service: error=[%s]", error);
             g_free (body);
             goto leave;
         }
@@ -1671,16 +1675,20 @@ read_cb (PnNode *conn,
             process_body_add_contact (service_request, body);
         /* else if (service_request->type == PN_RM_CONTACT_AB) */
         else if (service_request->type == PN_RM_CONTACT_ALLOW)
+        {
             pn_service_session_request (service_request->service_session,
                                         PN_ADD_CONTACT_BLOCK,
                                         service_request->value,
                                         service_request->extra_value, NULL);
+        }
         /* else if (service_request->type == PN_ADD_CONTACT_BLOCK) */
         else if (service_request->type == PN_RM_CONTACT_BLOCK)
+        {
             pn_service_session_request (service_request->service_session,
                                         PN_ADD_CONTACT_ALLOW,
                                         service_request->value,
                                         service_request->extra_value, NULL);
+        }
         /* else if (service_request->type == PN_ADD_CONTACT_ALLOW) */
         /* else if (service_request->type == PN_RM_CONTACT_PENDING) */
         /* else if (service_request->type == PN_ADD_CONTACT_PENDING) */
