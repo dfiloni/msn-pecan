@@ -144,6 +144,21 @@ process_body (AuthRequest *req,
 
     pn_debug ("body=[%.*s]", (int) length, body);
 
+    cur = strstr (body, "<faultstring>");
+    if (cur)
+    {
+        gchar *error, *end;
+
+        cur = strchr (cur, '>') + 1;
+        end = strchr (cur, '<');
+        error = g_strndup (cur, end - cur);
+
+        msn_session_set_error (req->auth->session, MSN_ERROR_SERVCONN, error);
+
+        g_free (error);
+        return;
+    }
+
     cur = strstr (body, "<wsse:BinarySecurityToken Id=\"PPToken1\">");
     if (!cur)
         cur = strstr (body, "<wsse:BinarySecurityToken Id=\"Compact1\">");
