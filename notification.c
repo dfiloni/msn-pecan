@@ -701,15 +701,16 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     g_strfreev (user_str);
     friendly = pn_url_decode(cmd->params[2]);
 
+    if (strcmp (passport, session->username) == 0)
+        goto leave;
+
     user = pn_contactlist_find_contact(session->contactlist, passport);
 
     if (!user)
     {
         pn_error ("unknown user: passport=[%s]", passport);
-        return;
+        goto leave;
     }
-
-    g_free (passport);
 
     pn_contact_set_friendly_name(user, friendly);
 
@@ -747,6 +748,8 @@ nln_cmd(MsnCmdProc *cmdproc, MsnCommand *cmd)
     /* if (!msn_session_get_bool (session, "use_server_alias"))
         msn_cmdproc_send (cmdproc, "SBP", "%s %s %s", pn_contact_get_guid (user), "MFN", cmd->params[2]); */
 
+leave:
+    g_free (passport);
     g_free (friendly);
 }
 
