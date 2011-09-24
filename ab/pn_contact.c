@@ -556,11 +556,7 @@ pn_contact_add_group_id (struct pn_contact *contact,
 
     passport = pn_contact_get_passport (contact);
     contactlist = contact->contactlist;
-    /* TODO: why is this needed? */
-    if (group_guid)
-        group_name = pn_contactlist_find_group_name (contactlist, group_guid);
-    else
-        group_name = MSN_NULL_GROUP_NAME;
+    group_name = pn_contactlist_find_group_name (contactlist, group_guid);
 
     if (!group_name) {
         pn_warning("Ignoring, null group?");

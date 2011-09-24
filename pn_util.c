@@ -984,7 +984,8 @@ pn_parse_xml_tag (const char *xml, const char *tag_name, char **value)
     gchar *cur = NULL, *end = NULL, *tag;
 
     tag = g_strdup_printf ("<%s>", tag_name);
-    cur = strstr (xml, tag);
+    if (xml)
+        cur = strstr (xml, tag);
     if (cur)
     {
         g_free (tag);
