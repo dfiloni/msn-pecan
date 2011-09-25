@@ -1447,7 +1447,7 @@ process_body_req_ab (ServiceRequest *service_request,
         cur = pn_parse_xml_tag (cur, "contactId", &contact_id);
         if (contact_id)
         {
-            gchar *passport, *end, *name, *guid;
+            gchar *passport, *end, *name, *guid = NULL;
             struct pn_contact *contact;
             gint network_id = 1;
 
@@ -1459,11 +1459,14 @@ process_body_req_ab (ServiceRequest *service_request,
                 network_id = 32;
             }
             /* TODO: more than one group can be set in <groupIds> */
-            end = pn_parse_xml_tag (cur, "guid", &guid);
-            if (end > next)
+            if (strstr (cur, "<guid>"))
             {
-                g_free (guid);
-                guid = NULL;
+                end = pn_parse_xml_tag (cur, "guid", &guid);
+                if (end > next)
+                {
+                    g_free (guid);
+                    guid = NULL;
+                }
             }
             end = pn_parse_xml_tag (cur, "displayName", &name);
             if (!name || end > next)
