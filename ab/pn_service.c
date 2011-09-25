@@ -1262,10 +1262,11 @@ process_body_req_memberlists (ServiceRequest *service_request,
                               char *body)
 {
     gchar *cur, *next = NULL;
+    PurpleAccount *account;
     MsnSession *session;
 
-
     session = service_request->service_session->session;
+    account = msn_session_get_user_data (service_request->service_session->session);
 
     cur = strstr (body, "<Membership><MemberRole>Allow</MemberRole>");
     if (cur)
@@ -1281,6 +1282,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, passport);
             pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+            purple_privacy_deny_remove (account, passport, TRUE);
+            purple_privacy_permit_add (account, passport, TRUE);
             contact->networkid = 1;
 
             g_free (passport);
@@ -1302,6 +1305,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, email);
             pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+            purple_privacy_deny_remove (account, email, TRUE);
+            purple_privacy_permit_add (account, email, TRUE);
             contact->networkid = 32;
 
             g_free (email);
@@ -1322,6 +1327,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, passport);
             pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
+            purple_privacy_permit_remove (account, passport, TRUE);
+            purple_privacy_deny_add (account, passport, TRUE);
             contact->networkid = 1;
 
             g_free (passport);
@@ -1342,6 +1349,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
             contact = pn_contact_new (session->contactlist);
             pn_contact_set_passport (contact, email);
             pn_contact_set_list_op (contact, MSN_LIST_BL_OP);
+            purple_privacy_permit_remove (account, email, TRUE);
+            purple_privacy_deny_add (account, email, TRUE);
             contact->networkid = 32;
 
             g_free (email);
