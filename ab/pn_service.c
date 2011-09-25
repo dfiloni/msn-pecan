@@ -1179,7 +1179,10 @@ open_cb (PnNode *conn,
     else if (service_request->type == PN_RM_GROUP)
         send_rm_group_request (conn, service_request);
     else if (service_request->type == PN_ADD_CONTACT_GROUP)
-        send_add_contact_group_request (conn, service_request);
+    {
+        if (service_request->value && service_request->extra_value)
+            send_add_contact_group_request (conn, service_request);
+    }
     else if (service_request->type == PN_RM_CONTACT_GROUP)
         send_rm_contact_group_request (conn, service_request);
     else if (service_request->type == PN_RENAME_GROUP)
@@ -1522,11 +1525,9 @@ process_body_add_contact (ServiceRequest *service_request,
             if (contact)
             {
                 contact->guid = guid;
-                if (service_request->value)
-                    pn_service_session_request (session->service_session,
-                                                PN_ADD_CONTACT_GROUP,
-                                                service_request->value,
-                                                service_request->data, NULL);
+                pn_service_session_request (session->service_session,
+                                            PN_ADD_CONTACT_GROUP, guid,
+                                            service_request->data, NULL);
             }
             else
                 g_free (guid);

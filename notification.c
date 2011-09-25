@@ -62,7 +62,6 @@ typedef struct
 {
     gchar *domain;
     gchar *name;
-    ServiceRequestType soap_type;
     gchar *group_guid;
 } FQYTransData;
 
@@ -348,20 +347,22 @@ usr_error(MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
 }
 
 static void
-add_contact_pending (struct MsnSession *session, char *email, int network_id,
-                     ServiceRequestType soap_type, gchar *group_guid)
+add_new_contact (struct MsnSession *session, char *email, int network_id,
+                 gchar *group_guid)
 {
     struct pn_contact *contact;
-
-    pn_service_session_request (session->service_session,
-                                soap_type, email,
-                                network_id == 32 ? "yahoo" : NULL, group_guid);
 
     contact = pn_contact_new (session->contactlist);
     pn_contact_set_passport (contact, email);
     pn_contact_set_network_id (contact, network_id);
-    pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
-    pn_contactlist_got_new_entry (session, contact, email);
+    pn_contact_set_list_op (contact, MSN_LIST_AL_OP);
+
+    pn_service_session_request (session->service_session,
+                                PN_ADD_CONTACT, email,
+                                network_id == 32 ? "yahoo" : NULL, group_guid);
+
+    if (group_guid)
+        pn_contact_add_group_id (contact, group_guid);
 }
 
 static void
@@ -426,9 +427,8 @@ fqy_error (MsnCmdProc *cmdproc, MsnTransaction *trans, int error)
 
         data = trans->data;
         email = g_strdup_printf ("%s@%s", data->name, data->domain);
-        add_contact_pending (cmdproc->session, email,
-                             strstr (email, "@yahoo.") ? 32 : 1,
-                             data->soap_type, data->group_guid);
+        add_new_contact (cmdproc->session, email,
+                         strstr (email, "@yahoo.") ? 32 : 1, data->group_guid);
         g_free (email);
         g_free (data->domain);
         g_free (data->name);
@@ -913,6 +913,7 @@ adl_cmd_read_payload (MsnCmdProc *cmdproc,
                       gsize len)
 {
     gchar *cur, *end, *domain, *name, *email, *t;
+    struct pn_contact *contact;
 
     cur = strstr (payload, "<d n=\"") + 6;
     end = strchr (cur, '\"');
@@ -928,8 +929,12 @@ adl_cmd_read_payload (MsnCmdProc *cmdproc,
     g_free (domain);
     g_free (name);
 
-    add_contact_pending (cmdproc->session, email, atoi (t),
-                         PN_ADD_CONTACT_PENDING, NULL);
+    contact = pn_contact_new (cmdproc->session->contactlist);
+    pn_contact_set_passport (contact, email);
+    pn_contact_set_network_id (contact, atoi(t));
+    pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+    pn_contactlist_got_new_entry (cmdproc->session, contact, email);
+
     g_free (t);
     g_free (email);
 }
@@ -969,8 +974,7 @@ fqy_cmd_post (MsnCmdProc *cmdproc,
     t = g_strndup (cur, end - cur);
 
     email = g_strdup_printf ("%s@%s", data->name, data->domain);
-    add_contact_pending (cmdproc->session, email, atoi (t),
-                         data->soap_type, data->group_guid);
+    add_new_contact (cmdproc->session, email, atoi (t), data->group_guid);
     g_free (email);
     g_free (t);
     g_free (data->domain);
@@ -1670,7 +1674,6 @@ msn_notification_add_buddy(MsnNotification *notification, const char *list,
         tmp = strchr (who, '@') + 1;
         data->domain = g_strdup (tmp);
         data->name = g_strndup (who, tmp - who - 1);
-        data->soap_type = PN_ADD_CONTACT;
         data->group_guid = group_guid ? g_strdup (group_guid) : NULL;
 
         payload = g_strdup_printf ("<ml><d n=\"%s\">"
