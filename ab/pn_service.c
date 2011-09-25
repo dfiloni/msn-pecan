@@ -1362,28 +1362,33 @@ process_body_req_memberlists (ServiceRequest *service_request,
         next = strstr (cur, "</Membership>");
     while (cur && cur < next)
     {
-        gchar *passport = NULL;
-        cur = pn_parse_xml_tag (cur, "PassportName", &passport);
-        if (passport)
+        gchar *passport, *end;
+        struct pn_contact *contact;
+        gint network_id = 1;
+
+        end = pn_parse_xml_tag (cur, "PassportName", &passport);
+        if (!passport || end > next)
         {
-            struct pn_contact *contact;
-
-            contact = pn_contactlist_find_contact (session->contactlist,
-                                                   passport);
-            if (!contact)
-            {
-                contact = pn_contact_new (session->contactlist);
-                pn_contact_set_passport (contact, passport);
-                pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
-                contact->networkid = 1;
-
-                pn_contactlist_got_new_entry (session,
-                                              contact,
-                                              passport);
-            }
-
             g_free (passport);
+            end = pn_parse_xml_tag (cur, "Email", &passport);
+            network_id = 32;
         }
+
+        contact = pn_contactlist_find_contact (session->contactlist, passport);
+        if (!contact)
+        {
+            contact = pn_contact_new (session->contactlist);
+            pn_contact_set_passport (contact, passport);
+            pn_contact_set_list_op (contact, MSN_LIST_NULL_OP);
+            contact->networkid = network_id;
+            pn_contactlist_got_new_entry (session, contact, passport);
+        }
+
+        g_free (passport);
+
+        cur = strstr (end, "<Membership><MemberRole>Pending</MemberRole>");
+        if (cur)
+            next = strstr (cur, "</Membership>");
     }
 
     msn_session_set_prp (session,
