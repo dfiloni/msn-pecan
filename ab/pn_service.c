@@ -1205,52 +1205,88 @@ next_request (PecanServiceSession *service_session)
 }
 
 /* Send ADL */
-/* TODO: rewrite this. Also this should be < 7500 bytes, if it isn't send two (or more) ADL */
 static inline void
 send_login_adl_command (struct MsnSession *session)
 {
     PurpleAccount *account;
     GSList *buddies;
-    gchar *payload, *tmp;
+    gchar *payload, *tmp, *name, *contact_domain, *str_c, *buddy_domain;
+    const gchar *buddy_name;
     MsnCmdProc *cmdproc;
     MsnTransaction *trans;
-
+    struct pn_contact *contact;
+    GQueue *domain = g_queue_new ();
+    int list_number = 1;
     cmdproc = session->notification->cmdproc;
-
     account = msn_session_get_user_data (session);
-    payload = g_strdup ("<ml l=\"1\">");
 
-    buddies = purple_find_buddies (account, NULL);
     for (buddies = purple_find_buddies (account, NULL); buddies;
          buddies = g_slist_delete_link (buddies, buddies))
     {
-        PurpleBuddy *buddy = buddies->data;
-        const gchar *buddy_name = purple_buddy_get_name (buddy);
-        struct pn_contact *contact;
-
-        contact = pn_contactlist_find_contact (session->contactlist, buddy_name);
-
-        if (contact)
-        {
-            gchar *domain, *name;
-            tmp = payload;
-            domain = strchr (buddy_name, '@');
-            name = g_strndup (buddy_name, domain - buddy_name);
-            payload = g_strdup_printf ("%s"
-                                       "<d n=\"%s\">"
-                                       "<c n=\"%s\" l=\"%d\" t=\"%d\" />"
-                                       "</d>",
-                                       tmp,
-                                       domain + 1,
-                                       name,
-                                       contact->list_op,
-                                       contact->networkid);
-            g_free (tmp);
-            g_free (name);
-        }
-        else
-            pn_error ("contact not found: %s", buddy_name);
+        contact_domain = g_strdup (strchr (purple_buddy_get_name (buddies->data), '@') + 1);
+        if (!g_queue_find_custom (domain, contact_domain, (GCompareFunc) strcmp))
+            g_queue_push_head (domain, contact_domain);
     }
+
+    payload = g_strdup_printf ("<ml l=\"%d\">", list_number);
+    while (!g_queue_is_empty (domain))
+    {
+        contact_domain = g_queue_pop_head (domain);
+        tmp = payload;
+        payload = g_strdup_printf ("%s<d n=\"%s\">", tmp, contact_domain);
+        g_free(tmp);
+
+        for (buddies = purple_find_buddies (account, NULL); buddies;
+             buddies = g_slist_delete_link (buddies, buddies))
+        {
+            buddy_name = purple_buddy_get_name (buddies->data);
+            buddy_domain = strchr (buddy_name, '@') + 1;
+            if (strcmp (buddy_domain, contact_domain) == 0)
+            {
+                contact = pn_contactlist_find_contact (session->contactlist,
+                                                       buddy_name);
+                if (contact)
+                {
+                    name = g_strndup (buddy_name, buddy_domain - buddy_name - 1);
+                    str_c = g_strdup_printf  ("<c n=\"%s\" l=\"%d\" t=\"%d\" />",
+                                              name, contact->list_op,
+                                              contact->networkid);
+                    g_free (name);
+
+                    if (strlen (payload) + 9 + strlen (str_c) < 7500)
+                    {
+                        tmp = payload;
+                        payload = g_strdup_printf ("%s%s", tmp, str_c);
+                        g_free (tmp);
+                    }
+                    else
+                    {
+                        tmp = payload;
+                        payload = g_strdup_printf ("%s</d></ml>", tmp);
+                        g_free (tmp);
+
+                        trans = msn_transaction_new (cmdproc, "ADL", "%zu",
+                                                     strlen (payload));
+                        msn_transaction_set_payload (trans, payload,
+                                                     strlen (payload));
+                        msn_cmdproc_send_trans (cmdproc, trans);
+
+                        list_number++;
+                        payload = g_strdup_printf ("<ml l=\"%d\"><d n\"%s\">%s",
+                                                   list_number,
+                                                   contact_domain,
+                                                   str_c);
+                    }
+                }
+                else
+                    pn_warning ("contact not found: %s", buddy_name);
+            }
+        }
+        tmp = payload;
+        payload = g_strdup_printf ("%s</d>", tmp);
+        g_free(tmp);
+    }
+
     tmp = payload;
     payload = g_strdup_printf ("%s</ml>", tmp);
     g_free (tmp);
