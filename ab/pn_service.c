@@ -1483,7 +1483,7 @@ process_body_req_ab (ServiceRequest *service_request,
         cur = pn_parse_xml_tag (cur, "contactId", &contact_id);
         if (contact_id)
         {
-            gchar *passport, *end, *name, *guid = NULL;
+            gchar *passport, *end, *name, *groups = NULL;
             struct pn_contact *contact;
             gint network_id = 1;
 
@@ -1493,16 +1493,6 @@ process_body_req_ab (ServiceRequest *service_request,
                 g_free (passport);
                 end = pn_parse_xml_tag (cur, "email", &passport);
                 network_id = 32;
-            }
-            /* TODO: more than one group can be set in <groupIds> */
-            if (strstr (cur, "<guid>"))
-            {
-                end = pn_parse_xml_tag (cur, "guid", &guid);
-                if (end > next)
-                {
-                    g_free (guid);
-                    guid = NULL;
-                }
             }
             end = pn_parse_xml_tag (cur, "displayName", &name);
             if (!name || end > next)
@@ -1526,11 +1516,32 @@ process_body_req_ab (ServiceRequest *service_request,
                 }
                 contact->guid = g_strdup (contact_id);
                 pn_contact_set_friendly_name (contact, name);
-                pn_contact_add_group_id (contact, guid);
+
+                if (strstr (cur, "<groupIds>"))
+                {
+                    end = pn_parse_xml_tag (cur, "groupIds", &groups);
+                    if (end > next)
+                    {
+                        g_free (groups);
+                        groups = NULL;
+                    }
+                }
+                if (groups)
+                {
+                    gchar *guid, *cur_g = groups;
+                    while (strcmp (cur_g, "</guid>") != 0)
+                    {
+                        cur_g = pn_parse_xml_tag (cur_g, "guid", &guid);
+                        pn_contact_add_group_id (contact, guid);
+                        g_free (guid);
+                    }
+                    g_free (groups);
+                }
+                else
+                    pn_contact_add_group_id (contact, NULL);
             }
 
             g_free (passport);
-            g_free (guid);
             g_free (name);
             g_free (contact_id);
         }
