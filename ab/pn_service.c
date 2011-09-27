@@ -1516,7 +1516,8 @@ process_body_req_ab (ServiceRequest *service_request,
                 }
                 contact->guid = g_strdup (contact_id);
                 pn_contact_set_friendly_name (contact, name);
-
+                /* for pn_contact_add_group_id */
+                pn_contact_add_group_id (contact, NULL);
                 if (strstr (cur, "<groupIds>"))
                 {
                     end = pn_parse_xml_tag (cur, "groupIds", &groups);
@@ -1537,8 +1538,6 @@ process_body_req_ab (ServiceRequest *service_request,
                     }
                     g_free (groups);
                 }
-                else
-                    pn_contact_add_group_id (contact, NULL);
             }
 
             g_free (passport);
