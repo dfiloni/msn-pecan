@@ -342,7 +342,8 @@ process_get_profile (RoamingRequest *roaming_request,
     }
 
 #ifndef PECAN_USE_PSM
-    pn_parse_xml_tag (body, "PersonalStatus", &value);
+    if (!strstr (body, "<PersonalStatus />"))
+        pn_parse_xml_tag (body, "PersonalStatus", &value);
     if (value)
     {
         PurpleAccount *account;
