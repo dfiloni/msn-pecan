@@ -43,6 +43,7 @@ struct PecanRoamingSession
 
     gchar *cachekey;
     gchar *resource_id;
+    gchar *hostname;
 };
 
 typedef struct RoamingRequest RoamingRequest;
@@ -60,6 +61,8 @@ struct RoamingRequest
 
     gulong open_sig_handler;
     PnNode *conn;
+
+    gchar *location;
 };
 
 static inline RoamingRequest *
@@ -78,6 +81,8 @@ roaming_request_new (PecanRoamingSession *roaming_session,
         roaming_request->extra_value = g_strdup (extra_value);
     roaming_request->type = type;
 
+    roaming_request->location = NULL;
+
     return roaming_request;
 }
 
@@ -92,6 +97,24 @@ roaming_request_free (RoamingRequest *roaming_request)
 
     g_free (roaming_request->value);
     g_free (roaming_request->extra_value);
+
+    g_free (roaming_request->location);
+
+    g_free (roaming_request);
+}
+
+static inline void
+roaming_request_reset (RoamingRequest *roaming_request)
+{
+    if (roaming_request->open_sig_handler)
+        g_signal_handler_disconnect (roaming_request->conn, roaming_request->open_sig_handler);
+
+    pn_node_free (roaming_request->conn);
+    pn_parser_free (roaming_request->parser);
+    roaming_request->parser_state = 0;
+
+    g_free (roaming_request->location);
+    roaming_request->location = NULL;
 
     g_free (roaming_request);
 }
@@ -125,6 +148,8 @@ pn_roaming_session_free (PecanRoamingSession *roaming_session)
 
     g_free (roaming_session->cachekey);
     g_free (roaming_session->resource_id);
+
+    g_free (roaming_session->hostname);
 
     g_free (roaming_session);
 }
@@ -189,11 +214,12 @@ send_get_profile_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: storage.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              roaming_request->roaming_session->hostname ? roaming_request->roaming_session->hostname : "storage.msn.com",
                               body);
 
     g_free (body);
@@ -271,11 +297,12 @@ send_update_profile_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: storage.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              roaming_request->roaming_session->hostname ? roaming_request->roaming_session->hostname : "storage.msn.com",
                               body);
 
     g_free (body);
@@ -315,7 +342,7 @@ open_cb (PnNode *conn,
 static inline void roaming_process_requests (PecanRoamingSession *roaming_session);
 
 static inline void
-next_request (PecanRoamingSession *roaming_session)
+next_request (PecanRoamingSession *roaming_session, gboolean got_hostname)
 {
     RoamingRequest *roaming_request;
 
@@ -361,6 +388,7 @@ read_cb (PnNode *conn,
     RoamingRequest *roaming_request;
     GIOStatus status = G_IO_STATUS_NORMAL;
     gchar *str = NULL;
+    gboolean got_hostname = FALSE;
 
     roaming_request = data;
 
@@ -382,6 +410,9 @@ read_cb (PnNode *conn,
 
             if (strncmp (str, "Content-Length: ", 16) == 0)
                 roaming_request->content_size = atoi(str + 16);
+
+            if (strncmp (str, "Location: ", 10) == 0)
+                roaming_request->location = g_strdup (str + 10);
 
             /* now comes the content */
             if (str[0] == '\0') {
@@ -405,6 +436,22 @@ read_cb (PnNode *conn,
         if (status != G_IO_STATUS_NORMAL)
             goto leave;
 
+        if (roaming_request->location != NULL)
+        {
+            gchar *cur;
+            cur = strstr (roaming_request->location, "://") + 3;
+            if (cur)
+            {
+                gchar *end = strchr (cur, '/');
+
+                g_free (roaming_request->roaming_session->hostname);
+                roaming_request->roaming_session->hostname = g_strndup (cur, end - cur);
+
+                got_hostname = TRUE;
+                goto leave;
+            }
+        }
+
         pn_debug ("%s", body);
 
         if (roaming_request->type == PN_GET_PROFILE)
@@ -427,7 +474,7 @@ read_cb (PnNode *conn,
 
 leave:
     pn_node_close (conn);
-    next_request (roaming_request->roaming_session);
+    next_request (roaming_request->roaming_session, got_hostname);
 }
 
 static void auth_cb (PnAuth *auth, void *data)
@@ -444,7 +491,10 @@ static void auth_cb (PnAuth *auth, void *data)
     roaming_request->parser = pn_parser_new (conn);
     pn_ssl_conn_set_read_cb (ssl_conn, read_cb, roaming_request);
 
-    pn_node_connect (conn, "storage.msn.com", 443);
+    if (!roaming_request->roaming_session->hostname)
+        pn_node_connect (conn, "tkrdr.storage.msn.com", 443);
+    else
+        pn_node_connect (conn, roaming_request->roaming_session->hostname, 443);
 
     roaming_request->conn = conn;
     roaming_request->open_sig_handler = g_signal_connect (conn, "open", G_CALLBACK (open_cb), roaming_request);
