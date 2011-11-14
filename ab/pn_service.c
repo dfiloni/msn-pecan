@@ -48,6 +48,7 @@ struct PecanServiceSession
     GQueue *request_queue;
 
     gchar *cachekey;
+    gchar *hostname;
 };
 
 typedef struct ServiceRequest ServiceRequest;
@@ -59,6 +60,8 @@ struct ServiceRequest
     guint parser_state;
     gsize content_size;
     ServiceRequestType type;
+
+    gchar *location;
 
     gchar *value;
     gchar *extra_value;
@@ -87,6 +90,8 @@ service_request_new (PecanServiceSession *service_session,
     service_request->data = data;
     service_request->type = type;
 
+    service_request->location = NULL;
+
     return service_request;
 }
 
@@ -99,10 +104,27 @@ service_request_free (ServiceRequest *service_request)
     pn_node_free (service_request->conn);
     pn_parser_free (service_request->parser);
 
+    g_free (service_request->location);
+
     g_free (service_request->value);
     g_free (service_request->extra_value);
 
     g_free (service_request);
+}
+
+static inline void
+service_request_reset (ServiceRequest *service_request)
+{
+    if (service_request->open_sig_handler)
+        g_signal_handler_disconnect (service_request->conn, service_request->open_sig_handler);
+
+    pn_node_free (service_request->conn);
+    pn_parser_free (service_request->parser);
+
+    g_free (service_request->location);
+    service_request->location = NULL;
+
+    service_request->parser_state = 0;
 }
 
 PecanServiceSession *
@@ -131,6 +153,8 @@ pn_service_session_free (PecanServiceSession *service_session)
         }
     }
     g_queue_free (service_session->request_queue);
+
+    g_free (service_session->hostname);
 
     g_free (service_session->cachekey);
 
@@ -185,11 +209,12 @@ send_req_memberlists_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -255,11 +280,12 @@ send_req_ab_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -353,11 +379,12 @@ send_add_contact_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -375,7 +402,7 @@ send_add_contact_request (PnNode *conn,
     pn_log ("end");
 }
 
-static inline void next_request (PecanServiceSession *service_session);
+static inline void next_request (PecanServiceSession *service_session, gboolean got_hostname);
 
 static inline void
 send_rm_contact_ab_request (PnNode *conn,
@@ -428,11 +455,12 @@ send_rm_contact_ab_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -533,11 +561,12 @@ rm_role_contact_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -638,11 +667,12 @@ add_role_contact_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -722,11 +752,12 @@ send_add_group_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -795,11 +826,12 @@ send_rm_group_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -874,11 +906,12 @@ send_add_contact_group_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -953,11 +986,12 @@ send_rm_contact_group_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -1031,11 +1065,12 @@ send_rename_group_request (PnNode *conn,
                               "Content-Type: text/xml; charset=utf-8\r\n"
                               "Content-Length: %zu\r\n"
                               "User-Agent: Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
-                              "Host: contacts.msn.com\r\n"
+                              "Host: %s\r\n"
                               "Connection: Keep-Alive\r\n"
                               "Cache-Control: no-cache\r\n"
                               "\r\n%s",
                               body_len,
+                              service_request->service_session->hostname ? service_request->service_session->hostname : "contacts.msn.com",
                               body);
 
     g_free (body);
@@ -1194,12 +1229,20 @@ open_cb (PnNode *conn,
 static inline void service_process_requests (PecanServiceSession *service_session);
 
 static inline void
-next_request (PecanServiceSession *service_session)
+next_request (PecanServiceSession *service_session, gboolean got_hostname)
 {
     ServiceRequest *service_request;
 
-    service_request = g_queue_pop_head (service_session->request_queue);
-    service_request_free (service_request);
+    if (!got_hostname)
+    {
+        service_request = g_queue_pop_head (service_session->request_queue);
+        service_request_free (service_request);
+    }
+    else
+    {
+        service_request = g_queue_peek_head (service_session->request_queue);
+        service_request_reset (service_request);
+    }
 
     service_process_requests (service_session);
 }
@@ -1627,6 +1670,7 @@ read_cb (PnNode *conn,
     ServiceRequest *service_request;
     GIOStatus status = G_IO_STATUS_NORMAL;
     gchar *str = NULL;
+    gboolean got_hostname = FALSE;
 
     service_request = data;
 
@@ -1649,6 +1693,9 @@ read_cb (PnNode *conn,
             if (strncmp (str, "Content-Length: ", 16) == 0)
                 service_request->content_size = atoi(str + 16);
 
+            if (strncmp (str, "Location: ", 10) == 0)
+                service_request->location = g_strdup (str + 10);
+
             /* now comes the content */
             if (str[0] == '\0') {
                 service_request->parser_state++;
@@ -1670,6 +1717,22 @@ read_cb (PnNode *conn,
 
         if (status != G_IO_STATUS_NORMAL)
             goto leave;
+
+        if (service_request->location != NULL)
+        {
+            gchar *cur;
+            cur = strstr (service_request->location, "://") + 3;
+            if (cur)
+            {
+                gchar *end = strchr (cur, '/');
+
+                g_free (service_request->service_session->hostname);
+                service_request->service_session->hostname = g_strndup (cur, end - cur);
+
+                got_hostname = TRUE;
+                goto leave;
+            }
+        }
 
         if (strstr (body, "<faultstring>") &&
             !strstr (body, "MemberAlreadyExists")) /* ignore this error */
@@ -1734,7 +1797,7 @@ read_cb (PnNode *conn,
 
 leave:
     pn_node_close (conn);
-    next_request (service_request->service_session);
+    next_request (service_request->service_session, got_hostname);
 }
 
 static void auth_cb (PnAuth *auth, void *data)
@@ -1751,7 +1814,10 @@ static void auth_cb (PnAuth *auth, void *data)
     service_request->parser = pn_parser_new (conn);
     pn_ssl_conn_set_read_cb (ssl_conn, read_cb, service_request);
 
-    pn_node_connect (conn, "contacts.msn.com", 443);
+    if (!service_request->service_session->hostname)
+        pn_node_connect (conn, "byrdr.omega.contacts.msn.com", 443);
+    else
+        pn_node_connect (conn, service_request->service_session->hostname, 443);
 
     service_request->conn = conn;
     service_request->open_sig_handler = g_signal_connect (conn, "open", G_CALLBACK (open_cb), service_request);
