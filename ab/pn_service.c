@@ -1370,7 +1370,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             g_free (passport);
         }
-
+        if (cur)
+            cur = strstr (cur, "<PassportName");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Allow</MemberRole>");
@@ -1393,6 +1394,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             g_free (email);
         }
+        if (cur)
+            cur = strstr (cur, "<Email");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Block</MemberRole>");
@@ -1415,6 +1418,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             g_free (passport);
         }
+        if (cur)
+            cur = strstr (cur, "<PassportName");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Block</MemberRole>");
@@ -1437,6 +1442,8 @@ process_body_req_memberlists (ServiceRequest *service_request,
 
             g_free (email);
         }
+        if (cur)
+            cur = strstr (cur, "<Email");
     }
 
     cur = strstr (body, "<Membership><MemberRole>Pending</MemberRole>");
