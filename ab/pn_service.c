@@ -1315,7 +1315,7 @@ send_login_adl_command (struct MsnSession *session)
                         msn_cmdproc_send_trans (cmdproc, trans);
 
                         list_number++;
-                        payload = g_strdup_printf ("<ml l=\"%d\"><d n\"%s\">%s",
+                        payload = g_strdup_printf ("<ml l=\"%d\"><d n=\"%s\">%s",
                                                    list_number,
                                                    contact_domain,
                                                    str_c);
