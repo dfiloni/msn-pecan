@@ -1259,7 +1259,7 @@ send_login_adl_command (struct MsnSession *session)
     MsnTransaction *trans;
     struct pn_contact *contact;
     GQueue *domain = g_queue_new ();
-    int list_number = 1;
+    int list_number = 1, sent_contacts = 0;
     cmdproc = session->notification->cmdproc;
     account = msn_session_get_user_data (session);
 
@@ -1296,7 +1296,7 @@ send_login_adl_command (struct MsnSession *session)
                                               contact->networkid);
                     g_free (name);
 
-                    if (strlen (payload) + 9 + strlen (str_c) < 7500)
+                    if (sent_contacts < 150)
                     {
                         tmp = payload;
                         payload = g_strdup_printf ("%s%s", tmp, str_c);
@@ -1315,11 +1315,13 @@ send_login_adl_command (struct MsnSession *session)
                         msn_cmdproc_send_trans (cmdproc, trans);
 
                         list_number++;
+                        sent_contacts = 0;
                         payload = g_strdup_printf ("<ml l=\"%d\"><d n=\"%s\">%s",
                                                    list_number,
                                                    contact_domain,
                                                    str_c);
                     }
+                    sent_contacts++;
                 }
                 else
                     pn_warning ("contact not found: %s", buddy_name);
