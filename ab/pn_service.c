@@ -1290,6 +1290,9 @@ send_login_adl_command (struct MsnSession *session)
                                                        buddy_name);
                 if (contact)
                 {
+                    if (contact->networkid == 32 && strncmp (contact_domain, "yahoo.com", 9) != 0)
+                        contact->networkid = 1;
+
                     name = g_strndup (buddy_name, buddy_domain - buddy_name - 1);
                     str_c = g_strdup_printf  ("<c n=\"%s\" l=\"%d\" t=\"%d\" />",
                                               name, contact->list_op,
