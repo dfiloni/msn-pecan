@@ -1259,7 +1259,7 @@ send_login_adl_command (struct MsnSession *session)
     MsnTransaction *trans;
     struct pn_contact *contact;
     GQueue *domain = g_queue_new ();
-    int list_number = 1, sent_contacts = 0;
+    int sent_contacts = 0;
     cmdproc = session->notification->cmdproc;
     account = msn_session_get_user_data (session);
 
@@ -1271,7 +1271,7 @@ send_login_adl_command (struct MsnSession *session)
             g_queue_push_head (domain, contact_domain);
     }
 
-    payload = g_strdup_printf ("<ml l=\"%d\">", list_number);
+    payload = g_strdup ("<ml l=\"1\">");
     while (!g_queue_is_empty (domain))
     {
         contact_domain = g_queue_pop_head (domain);
@@ -1317,10 +1317,8 @@ send_login_adl_command (struct MsnSession *session)
                                                      strlen (payload));
                         msn_cmdproc_send_trans (cmdproc, trans);
 
-                        list_number++;
                         sent_contacts = 0;
-                        payload = g_strdup_printf ("<ml l=\"%d\"><d n=\"%s\">%s",
-                                                   list_number,
+                        payload = g_strdup_printf ("<ml l=\"1\"><d n=\"%s\">%s",
                                                    contact_domain,
                                                    str_c);
                     }
